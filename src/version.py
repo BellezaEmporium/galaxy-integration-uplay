@@ -1,6 +1,13 @@
-__version__ = '0.55.5'
+__version__ = '0.55.6'
 
 __changelog__ = {
+    "0.55.6": """
+        - fix old uPlay links to actually get into something
+        - fix the authentification flow to properly log in & refresh tokens
+        - update dependencies, bump galaxy.plugin.api to latest
+        - replace all references of Ubi Club to Ubisoft+
+        - try to fix the authentification flow to prevent not being able to log in via webauth page
+    """,
     "0.55.5": """
         - fix parsing club games during fetching owned games; extend logging for unparsable items
     """,
