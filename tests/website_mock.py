@@ -64,158 +64,38 @@ class BackendClientMock(AsyncMock):
     async def get_subscription_titles(self):
         return None
 
-    async def get_club_titles(self):
+    async def get_entitlements(self):
         return {
-            "data": {
-                "viewer": {
-                  "id": "57a84edf-09d7-448f-a18f-09c504b84637",
-                  "ownedGames": {
-                    "totalCount": 8,
-                    "nodes": [
-                      {
-                        "id": "6678eff0-1293-4f87-8c8c-06a4ca646068",
-                        "spaceId": "6678eff0-1293-4f87-8c8c-06a4ca646068",
-                        "name": "Assassin's Creed\u00ae Unity",
-                        "viewer": {
-                          "meta": {
-                            "id": "57a84edf-09d7-448f-a18f-09c504b84637-8c8d9b22-498c-45e6-80da-7cd22787c9b3",
-                            "ownedPlatformGroups": [
-                              [
-                                {
-                                  "id": "35c5c607-2717-47d9-9323-7df47c6e1c4d",
-                                  "name": "PC",
-                                  "type": "PC"
-                                }
-                              ]
-                            ]
-                          }
-                        }
-                      },
-                      {
-                        "id": "f40e304d-8e8d-4343-8270-d06487c35add",
-                        "spaceId": "f40e304d-8e8d-4343-8270-d06487c35add",
-                        "name": "Far Cry\u00ae 5",
-                        "viewer": {
-                          "meta": {
-                            "id": "57a84edf-09d7-448f-a18f-09c504b84637-8c8d9b22-498c-45e6-80da-7cd22787c9b3",
-                            "ownedPlatformGroups": [
-                              [
-                                {
-                                  "id": "35c5c607-2717-47d9-9323-7df47c6e1c4d",
-                                  "name": "PC",
-                                  "type": "PC"
-                                }
-                              ],
-                              [
-                                {
-                                  "id": "35c5c607-2717-47d9-9323-7df47c6e1c4d",
-                                  "name": "stadia",
-                                  "type": "STADIA"
-                                }
-                              ]
-                            ]
-                          }
-                        }
-                      },
-                      {
-                        "id": "6edd234a-abff-4e90-9aab-b9b9c6e49ff7",
-                        "spaceId": "6edd234a-abff-4e90-9aab-b9b9c6e49ff7",
-                        "name": "Tom Clancy's The Division\u2122 ",
-                        "viewer": {
-                          "meta": {
-                            "id": "57a84edf-09d7-448f-a18f-09c504b84637-8c8d9b22-498c-45e6-80da-7cd22787c9b3",
-                            "ownedPlatformGroups": [
-                              [
-                                {
-                                  "id": "35c5c607-2717-47d9-9323-7df47c6e1c4d",
-                                  "name": "PC",
-                                  "type": "PC"
-                                }
-                              ]
-                            ]
-                          }
-                        }
-                      },
-                      {
-                        "id": "1d1273d9-2120-4e55-8d98-66e08781258e",
-                        "spaceId": "1d1273d9-2120-4e55-8d98-66e08781258e",
-                        "name": "Trackmania Turbo",
-                        "viewer": {
-                          "meta": {
-                            "id": "57a84edf-09d7-448f-a18f-09c504b84637-8c8d9b22-498c-45e6-80da-7cd22787c9b3",
-                            "ownedPlatformGroups": [
-                              [
-                                {
-                                  "id": "35c5c607-2717-47d9-9323-7df47c6e1c4d",
-                                  "name": "PC",
-                                  "type": "PC"
-                                }
-                              ]
-                            ]
-                          }
-                        }
-                      },
-                      {
-                        "id": "50228b8c-bbaa-4c32-83c6-2831a1ac317c",
-                        "spaceId": "50228b8c-bbaa-4c32-83c6-2831a1ac317c",
-                        "name": "Far Cry\u00ae 3",
-                        "viewer": {
-                          "meta": {
-                            "id": "57a84edf-09d7-448f-a18f-09c504b84637-8c8d9b22-498c-45e6-80da-7cd22787c9b3",
-                            "ownedPlatformGroups": [
-                              [
-                                {
-                                  "id": "35c5c607-2717-47d9-9323-7df47c6e1c4d",
-                                  "name": "PC",
-                                  "type": "PC"
-                                }
-                              ]
-                            ]
-                          }
-                        }
-                      },
-                      {
-                        "id": "4bd0476b-acec-446d-b526-23a0209101ca",
-                        "spaceId": "4bd0476b-acec-446d-b526-23a0209101ca",
-                        "name": "Far Cry\u00ae 3 Blood Dragon",
-                        "viewer": {
-                          "meta": {
-                            "id": "57a84edf-09d7-448f-a18f-09c504b84637-8c8d9b22-498c-45e6-80da-7cd22787c9b3",
-                            "ownedPlatformGroups": [
-                              [
-                                {
-                                  "id": "35c5c607-2717-47d9-9323-7df47c6e1c4d",
-                                  "name": "PC",
-                                  "type": "PC"
-                                }
-                              ]
-                            ]
-                          }
-                        }
-                      },
-                      {
-                        "id": "4bd0476b-acec-446d-b526-23a0209101ca",
-                        "spaceId": "4bd0476b-acec-446d-b526-23a0209101ca",
-                        "name": "ONLY_STADIA_GAME",
-                        "viewer": {
-                          "meta": {
-                            "id": "57a84edf-09d7-448f-a18f-09c504b84637-8c8d9b22-498c-45e6-80da-7cd22787c9b3",
-                            "ownedPlatformGroups": [
-                              [
-                                {
-                                  "id": "35c5c607-2717-47d9-9323-7df47c6e1c4d",
-                                  "name": "stadia",
-                                  "type": "STADIA"
-                                }
-                              ]
-                            ]
-                          }
-                        }
-                      },
-                    ]
-                  }
-                }
-            }
+            "entitlements": [
+              {
+                "productId": 4,
+                "availability": "playable",
+                "accessLevel": "owned",
+                "source": "activation",
+                "type": "game",
+                "spaceId": "97ef669a-c028-4c25-b5ff-7335aa5d806c",
+                "applicationId": "20a72d33-4b3e-47df-b88c-bbd632ed57df",
+                "playable": True,
+                "downloadable": True,
+                "protectedTimeTrial": False,
+                "grantedAt": "2020-05-01T10:55:31.000Z",
+                "playTrial": None
+              },
+              {
+                "productId": 46,
+                "availability": "playable",
+                "accessLevel": "owned",
+                "source": "activation",
+                "type": "game",
+                "spaceId": "50228b8c-bbaa-4c32-83c6-2831a1ac317c",
+                "applicationId": "15a42aaf-f5cc-47df-bbb3-f59768ac6eed",
+                "playable": True,
+                "downloadable": True,
+                "protectedTimeTrial": False,
+                "grantedAt": "2021-09-08T13:01:27.000Z",
+                "playTrial": None
+              },
+            ]
         }
 
     def get_applications(self):

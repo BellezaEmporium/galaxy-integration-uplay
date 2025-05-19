@@ -1,0 +1,12 @@
+{
+    "name": "Ubisoft Connect",
+    "platform": "uplay",
+    "guid": "afb5a69c-b2ee-4d58-b916-f4cd75d4999a",
+    "version": "0.55.6",
+    "description": "Ubisoft Connect plugin for GOG Galaxy 2.0",
+    "author": "Friends of Galaxy, BellezaEmporium, Nutzzz",
+    "email": "lanesh4d0w@gmail.com",
+    "url": "https://github.com/BellezaEmporium/galaxy-integration-uplay",
+    "update_url": "https://raw.githubusercontent.com/BellezaEmporium/galaxy-integration-uplay/juno_api/current_version.json",
+    "script": "plugin.py"
+}

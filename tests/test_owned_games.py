@@ -39,7 +39,7 @@ def test_owned_games_club_only(create_authenticated_plugin, result_owned_club_ga
 ])
 @pytest.mark.asyncio
 async def test_owned_games_with_unknown_response_from_club_games(authenticated_plugin, backend_client, response):
-    backend_client.get_club_titles = AsyncMock(return_value=response)
+    backend_client.get_entitlements = AsyncMock(return_value=response)
     owned_game_from_ownership_file = UbisoftGame(
         space_id='',
         launch_id="GAME_ID",
@@ -109,7 +109,7 @@ def test_owned_games_club_only_with_multi_platform_groups(create_authenticated_p
                 }
             }
         }
-    backend_client.get_club_titles = AsyncMock(return_value=data)
+    backend_client.get_entitlements = AsyncMock(return_value=data)
     expected_result = [Game(
         "6678eff0-1293-4f87-8c8c-06a4ca646068",
         "Assassin's Creed\u00ae Unity",

@@ -1,12 +1,12 @@
 {
-    "tag_name": "v0.55.5",
+    "tag_name": "v0.55.6",
     "assets": [
         {
-            "browser_download_url": "https://github.com/FriendsOfGalaxy/galaxy-integration-uplay/releases/download/v0.55.5/windows.zip",
+            "browser_download_url": "https://github.com/BellezaEmporium/galaxy-integration-uplay/releases/download/v0.55.6/windows.zip",
             "name": "windows.zip"
         },
         {
-            "browser_download_url": "https://github.com/FriendsOfGalaxy/galaxy-integration-uplay/releases/download/v0.55.5/macos.zip",
+            "browser_download_url": "https://github.com/BellezaEmporium/galaxy-integration-uplay/releases/download/v0.55.6/macos.zip",
             "name": "macos.zip"
         }
     ]

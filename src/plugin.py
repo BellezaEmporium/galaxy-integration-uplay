@@ -6,9 +6,11 @@ import multiprocessing
 import subprocess
 import sys
 import webbrowser
+import aiohttp
 from yaml import scanner
 from urllib.parse import unquote
 from typing import Any, List, AsyncGenerator, Optional
+
 
 from galaxy.api.consts import Platform
 from galaxy.api.jsonrpc import ApplicationError
@@ -25,7 +27,7 @@ from local_game_status import ProcessWatcher, GameStatusNotifier
 from local_helper import get_local_game_path, get_size_at_path
 from definitions import GameStatus, UbisoftGame, GameType, System, SYSTEM
 from stats import find_times
-from consts import AUTH_PARAMS, AUTH_JS
+from consts import AUTH_JS
 from games_collection import GamesCollection
 from version import __version__
 from steam import is_steam_installed
@@ -53,6 +55,28 @@ class UplayPlugin(Plugin):
         self.lost_authentication()
 
     async def authenticate(self, stored_credentials=None):
+        """Called when the plugin is started and needs to authenticate the user"""
+        # in order for Ubisoft's genome and app id to be valid, we'll sniff out the SDK file.
+        settings = "https://store.ubisoft.com/on/demandware.store/Sites-us_ubisoft-Site/en-US/UPlayConnect-GetAPISettingsJson"
+
+        async with aiohttp.ClientSession() as session:
+            async with session.get(settings) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    if 'genome-id' in data and 'app-id' in data:
+                        log.info(f"Found genome_id: {data['genome-id']}, app_id: {data['app-id']}")
+                        app_id = data['app-id']
+                        genome_id = data['genome-id']
+                    else:
+                        log.info(f"Not quite sure, seems like Ubisoft changed their code. ")
+
+        AUTH_PARAMS = {
+            "window_title": "Login | Ubisoft WebAuth",
+            "window_width": 460,
+            "window_height": 690,
+            "start_uri": f"https://connect.ubisoft.com/login?appId={app_id}&genomeId={genome_id}&lang=en-US&nextUrl=https:%2F%2Fconnect.ubisoft.com%2Fready",
+            "end_uri_regex": r".*rememberMeTicket.*"
+        }
 
         if not stored_credentials:
             return NextStep("web_session", AUTH_PARAMS, js=AUTH_JS)
@@ -64,7 +88,8 @@ class UplayPlugin(Plugin):
                 raise InvalidCredentials()
             except Exception as e:
                 log.exception(repr(e))
-                raise e
+                # On any other error (e.g., UnknownError), restart web authentication
+                return NextStep("web_session", AUTH_PARAMS, js=AUTH_JS)
             else:
                 self.local_client.initialize(user_data['userId'])
                 self.client.set_auth_lost_callback(self.auth_lost)
@@ -156,8 +181,18 @@ class UplayPlugin(Plugin):
         if not self.parsing_club_games:
             try:
                 self.parsing_club_games = True
-                data = await self.client.get_club_titles()
-                games = data['data']['viewer']['ownedGames'].get('nodes', [])
+                data = await self.client.get_entitlements()
+                all_entitlements = data['entitlements'].get('nodes', [])
+                log.debug(f"Processing {len(all_entitlements)} total entitlements")
+                games = []
+                for game in all_entitlements:
+                    try:
+                        if game.get('accessLevel') == 'owned' and game.get('type') == 'game' and game.get("availability") != 'expired':
+                            games.append(game)
+                    except Exception as e:
+                        log.warning(f"Error processing entitlement: {e}")
+                        continue
+                log.debug(f"Filtered {len(games)} owned games from {len(all_entitlements)} total entitlements")
                 club_games = []
                 for game in games:
                     try:
@@ -181,14 +216,13 @@ class UplayPlugin(Plugin):
             finally:
                 self.parsing_club_games = False
         else:
-            # Wait until club games get parsed if parsing is already in progress
             while self.parsing_club_games:
                 await asyncio.sleep(0.2)
 
     def _parse_local_games(self):
         """Parsing local files should lead to every game having a launch id.
         A game in the games_collection which doesn't have a launch id probably
-        means that a game was added through the get_club_titles request but its space id
+        means that a game was added through the get_entitlements request but its space id
         was not present in configuration file and we couldn't find a matching launch id for it."""
         if self.local_client.configurations_accessible():
             try:
@@ -484,13 +518,13 @@ class UplayPlugin(Plugin):
     async def get_subscriptions(self) -> List[Subscription]:
         sub_status = await self.client.get_subscription()
         sub_status = True if sub_status else False
-        return [Subscription(subscription_name="Uplay+", end_time=None, owned=sub_status,
+        return [Subscription(subscription_name="Ubisoft+", end_time=None, owned=sub_status,
                              subscription_discovery=SubscriptionDiscovery.AUTOMATIC)]
 
     async def prepare_subscription_games_context(self, subscription_names: List[str]) -> Any:
-        sub_games_response = await self.client.get_subscription()
+        sub_games_response = await self.client.get_subscription_games()
         if sub_games_response:
-            return [SubscriptionGame(game_title=game['name'], game_id=str(game['uplayGameId'])) for game in
+            return [SubscriptionGame(game_title=game['name'], game_id=str(game['ubisoftConnectGameId'])) for game in
                     sub_games_response["games"]]
         return None
 

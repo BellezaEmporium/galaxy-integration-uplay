@@ -331,7 +331,6 @@ class LocalParser(object):
             exe=exe,
             status=status
         )
-
     def parse_games(self, configuration_data):
         self.configuration_raw = configuration_data
 
@@ -340,7 +339,7 @@ class LocalParser(object):
             if game['size']:
                 stream = self.configuration_raw[game['offset']: game['offset'] + game['size']].decode("utf8", errors='ignore')
                 if stream and 'start_game' in stream:
-                    yaml_object = yaml.load(stream.replace('\t',' '))
+                    yaml_object = yaml.load(stream.replace('\t',' '), Loader=yaml.SafeLoader)
                     yield self._parse_game(yaml_object, game['install_id'], game['launch_id'])
 
     def get_owned_local_games(self, ownership_data):
