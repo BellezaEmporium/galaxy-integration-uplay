@@ -69,7 +69,7 @@ class LocalClient(object):
         return self._is_installed
 
     def is_running(self):
-        return ctypes.windll.user32.FindWindowW(None, "Uplay")
+        return ctypes.windll.user32.FindWindowW(None, "Ubisoft Connect")
 
     @property
     def was_user_logged_in(self):

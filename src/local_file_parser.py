@@ -253,13 +253,19 @@ class LocalParser(object):
             game_name = game_yaml['root']['name']
         # Fallback 1
         if game_name.lower() in UBISOFT_CONFIGURATIONS_BLACKLISTED_NAMES:
-            if 'installer' in game_yaml['root'] and 'game_identifier' in game_yaml['root']['installer']:
-                game_name = game_yaml['root']['installer']['game_identifier']
+            if 'localizations' in game_yaml and 'default' in game_yaml['localizations'] and 'l1' in \
+                    game_yaml['localizations']['default']:
+                game_name = game_yaml['localizations']['default']['l1']   
         # Fallback 2
         if game_name.lower() in UBISOFT_CONFIGURATIONS_BLACKLISTED_NAMES:
             if 'localizations' in game_yaml and 'default' in game_yaml['localizations'] and 'GAMENAME' in \
                     game_yaml['localizations']['default']:
                 game_name = game_yaml['localizations']['default']['GAMENAME']
+        # Fallback 3
+        if game_name.lower() in UBISOFT_CONFIGURATIONS_BLACKLISTED_NAMES:
+            if 'installer' in game_yaml['root'] and 'game_identifier' in game_yaml['root']['installer']:
+                game_name = game_yaml['root']['installer']['game_identifier']
+        
         return game_name
 
     def _get_steam_game_properties_from_yaml(self, game_yaml):
@@ -298,6 +304,11 @@ class LocalParser(object):
 
         if 'space_id' in game_yaml['root']:
             space_id = game_yaml['root']['space_id']
+        # Fall back, in VERY OLD games (not Rayman Origins kind of old), it's under "app_id"
+        elif 'app_id' in game_yaml['root']:
+            space_id = game_yaml['root']['app_id']
+        elif 'crash_reporting' in game_yaml['root'] and 'space_id' in game_yaml['root']['crash_reporting']:
+            game_name = game_yaml['root']['crash_reporting']['space_id']
         else:
             game_type = GameType.Legacy
 

@@ -39,7 +39,7 @@ def build(c, output='output', ziparchive=None):
     # as pip requires --no-deps if --platform is used.
     print('--> Flattening dependencies to temporary requirements file')
     with tempfile.NamedTemporaryFile(mode="w", delete=False) as tmp:
-        c.run(f'pip-compile requirements/app.txt --output-file=-', out_stream=tmp)
+        c.run(f'pip-compile requirements/app.txt --resolver=backtracking --output-file=-', out_stream=tmp)
 
     # Then install all stuff with pip to output folder
     print('--> Installing with pip for specific version')

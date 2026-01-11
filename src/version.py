@@ -6,7 +6,7 @@ __changelog__ = {
         - fix the authentification flow to properly log in & refresh tokens
         - update dependencies, bump galaxy.plugin.api to latest
         - replace all references of Ubisoft Club to Ubisoft+
-        - try to fix the authentification flow to prevent not being able to log in via webauth page
+        - try to fix the authentification flow to prevent not being able to log in via webauth page [using application ids]
     """,
     "0.55.5": """
         - fix parsing club games during fetching owned games; extend logging for unparsable items

@@ -21,3 +21,5 @@ requirements/dev.txt
 
 # distribution packages
 uplay_v*.zip
+windows.zip
+mac.zip

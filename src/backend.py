@@ -90,7 +90,6 @@ class BackendClient:
         except Exception:
             pass
 
-
     def _cache_id(self, data, api_key, data_key, attr_name, cache_key, current_time):
         """Cache an ID value."""
         if api_key not in data or getattr(self, attr_name):
@@ -113,9 +112,7 @@ class BackendClient:
             app_id = UBISOFT_APPID
             self._session.headers['Ubi-AppId'] = app_id
         return self._session.headers['Ubi-AppId']
-    # endregion
 
-    # region Session Management
     async def __aenter__(self):
         await self.ensure_app_id_header()
         return self
@@ -137,9 +134,7 @@ class BackendClient:
 
     def is_authenticated(self):
         return self.token is not None
-    # endregion
 
-    # region Headers
     def _build_headers(self, *, include_auth=False, extra=None):
         """Build request headers with optional auth."""
         headers = {
@@ -166,9 +161,7 @@ class BackendClient:
         updates = self._build_headers(include_auth=True)
         for key, value in updates.items():
             self._session.headers[key] = value
-    # endregion
 
-    # region Request Helpers
     async def _do_request(self, method, *args, **kwargs):
         """Wrapper around http_client.do_request."""
         return await self._http_client.do_request(
@@ -201,9 +194,7 @@ class BackendClient:
         
         headers.update(kwargs.pop('extra_headers', {}))
         return await self._do_request(method, url, headers=headers, **kwargs)
-    # endregion
 
-    # region Token Refresh
     def _should_refresh_token(self):
         """Check if token should be refreshed."""
         if not self.refresh_token:
@@ -308,9 +299,7 @@ class BackendClient:
         refresh_time = datetime.now() + (expiration - server_time)
         response['refreshTime'] = round(refresh_time.timestamp())
         await self.restore_credentials(response, refresh_remember_me=False)
-    # endregion
 
-    # region Credentials
     async def restore_credentials(self, data, refresh_remember_me=True):
         """Restore credentials from data."""
         self.token = data['ticket']
@@ -374,9 +363,7 @@ class BackendClient:
         await self.post_sessions()
         self._plugin.store_credentials(self.get_credentials())
         return user_data
-    # endregion
 
-    # region Keepalive
     async def _connection_keepalive(self):
         """Background task to keep connection alive."""
         while True:
@@ -416,9 +403,7 @@ class BackendClient:
             except Exception as e:
                 log.warning(f"Keepalive error: {e}")
                 await asyncio.sleep(60)
-    # endregion
 
-    # region API Methods
     async def get_user_data(self):
         """Get user data from Ubisoft API."""
         try:
@@ -454,8 +439,8 @@ class BackendClient:
             return {}
 
     async def get_applications(self, spaces):
-        space_string = ','.join(s['spaceId'] for s in spaces)
-        return await self._do_request('get', f"https://api-ubiservices.ubi.com/v2/applications?spaceIds={space_string}", add_to_headers={'Ubi-RequestedPlatformType': 'uplay'})
+        space_string = ','.join(s for s in spaces)
+        return await self._do_request('get', f"{UBI_API_BASE}/v1/spaces/global/ubiconnect/games/api/catalog?spaceIds={space_string}", add_to_headers={'Ubi-RequestedPlatformType': 'uplay'})
 
     async def get_configuration(self):
         return await self._do_request('get', f'{UBI_API_BASE}/v1/spaces/7e8070f7-8f76-4122-8ffc-63b361c3ab9e/parameters')
@@ -497,4 +482,3 @@ class BackendClient:
         except Exception as e:
             log.warning(f"Failed to get subscription games: {e}")
             return []
-    # endregion

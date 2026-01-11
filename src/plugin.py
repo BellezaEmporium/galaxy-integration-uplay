@@ -146,55 +146,76 @@ class UplayPlugin(Plugin):
             log.debug(f"Subscription games parsing failed: {repr(e)}")
 
     async def _parse_ubiplus_games(self):
-        def get_platforms(game):
-            platform_groups = game['viewer']['meta']['ownedPlatformGroups']
-            platforms = []
-            for group in platform_groups:
-                for platform in group:
-                    platforms.append(platform.get('type', ''))
-            return platforms
-
-        def parse_game(game: dict) -> UbisoftGame:
-            log.info(f"Parsed game from ubiplus Request {game['name']}")
-            return UbisoftGame(space_id=game['spaceId'], launch_id='', install_id='', third_party_id='',
-                                name=game['name'], path='', type=GameType.New, special_registry_path='', exe='',
-                                status=GameStatus.Unknown, owned=True)
+        """Parse owned games list from backend"""
+        BATCH_SIZE = 50  # Ubisoft can only return 50 results per request. Do not overload.
 
         if not self.parsing_ubiplus_games:
             try:
                 self.parsing_ubiplus_games = True
                 data = await self.client.get_entitlements()
-                all_entitlements = data['entitlements'].get('nodes', [])
-                log.debug(f"Processing {len(all_entitlements)} total entitlements")
+                entitlements_data = data.get('entitlements', [])
+                log.debug(f"Processing {len(entitlements_data)} total entitlements")
                 games = []
-                for game in all_entitlements:
+                for game in entitlements_data:
                     try:
                         if game.get('accessLevel') == 'owned' and game.get('type') == 'game' and game.get("availability") != 'expired':
                             games.append(game)
                     except Exception as e:
                         log.warning(f"Error processing entitlement: {e}")
                         continue
-                log.debug(f"Filtered {len(games)} owned games from {len(all_entitlements)} total entitlements")
+                log.debug(f"Filtered {len(games)} owned games from {len(entitlements_data)} total entitlements")
+                
                 ubiplus_games = []
-                for game in games:
+                batched_games = [games[i:i + BATCH_SIZE] for i in range(0, len(games), BATCH_SIZE)]
+                log.debug(f"Processing {len(batched_games)} batches of up to {BATCH_SIZE} games each")
+                
+                for batch_index, game_batch in enumerate(batched_games):
                     try:
-                        platforms = get_platforms(game)
-                        if "PC" in platforms:
-                            ubiplus_games.append(parse_game(game))
-                        else:
-                            log.debug(f"Skipped game from Ubisoft+ Request for {platforms}: {game['spaceId']}, {game['name']}")
+                        space_ids = [game['spaceId'] for game in game_batch if game.get('spaceId')]
+                        if not space_ids:
+                            log.debug(f"Batch {batch_index + 1}: No valid spaceIds, skipping")
+                            continue
+                            
+                        log.debug(f"Batch {batch_index + 1}/{len(batched_games)}: Requesting {len(space_ids)} games")
+                        game_request = await self.client.get_applications(space_ids)
+                        game_data = game_request.get('games', [])
+                        log.debug(f"Batch {batch_index + 1}: Received {len(game_data)} games from API")
+                        
+                        for game in game_data:
+                            try:
+                                platforms = game.get('platforms', [])
+                                pc_platform_exists = any(
+                                    platform.get('type') == "PC" 
+                                    for platform in platforms 
+                                    if isinstance(platform, dict)
+                                )
+                                if pc_platform_exists:
+                                    ubiplus_games.append(UbisoftGame(
+                                        space_id=game.get('spaceId', ''),
+                                        launch_id='', install_id='', third_party_id='',
+                                        name=game.get('name', 'Unknown'), path='', type=GameType.New,
+                                        special_registry_path='', exe='',
+                                        status=GameStatus.Unknown, owned=True
+                                    ))
+                            except Exception as e:
+                                log.warning(f"Error processing game data: {e}")
                     except TypeError as e:
-                        log.warning("Raised an error: %s for game: %s" % (e, game))
+                        log.warning(f"Batch {batch_index + 1}: TypeError - {e}")
                         continue
+                    except Exception as e:
+                        log.warning(f"Batch {batch_index + 1}: Error - {repr(e)}")
+                        continue
+                
+                log.info(f"Parsed {len(ubiplus_games)} PC games from Ubisoft entitlements")
                 self.games_collection.extend(ubiplus_games)
             except (KeyError, TypeError) as e:
-                log.error(f"Unknown response from Ubisoft while trying to parse Ubisoft+ games {repr(e)}")
+                log.error(f"Unknown response from Ubisoft while trying to parse games {repr(e)}")
                 raise UnknownBackendResponse()
             except ApplicationError as e:
-                log.error(f"Encountered exception while parsing Ubisoft+ games {repr(e)}")
+                log.error(f"Encountered exception while parsing Ubisoft games {repr(e)}")
                 raise e
             except Exception as e:
-                log.error(f"Encountered exception while parsing Ubisoft+ games {repr(e)}")
+                log.error(f"Encountered exception while parsing Ubisoft games {repr(e)}")
             finally:
                 self.parsing_ubiplus_games = False
         else:
