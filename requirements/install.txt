@@ -1,11 +1,11 @@
 #use specific pip version for dependencies to work nicely
-pip==22.0.4
-pip-tools
+pip==22.2.0
+pip-tools==6.14.0
 
 requests
 
 #install requirements. 
-invoke==1.2.0
+invoke==2.2.0
 wheel
 
 galaxy.plugin.api==0.69

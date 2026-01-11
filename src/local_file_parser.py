@@ -155,6 +155,8 @@ class LocalParser(object):
         ownership_content = self.ownership_raw
         global_offset = 0x108
         records = []
+        if ownership_content is None:
+            return []
         try:
             while global_offset < len(ownership_content):
                 data = ownership_content[global_offset:]
@@ -163,7 +165,10 @@ class LocalParser(object):
                     records.append(launch_id)
                     if launch_id2 != launch_id:
                         records.append(launch_id2)
-                    global_offset += record_size
+                    if record_size is not None:
+                        global_offset += record_size
+                    else:
+                        break
                 else:
                     break
         except:
@@ -212,14 +217,14 @@ class LocalParser(object):
         fav = set()
         hidden = set()
         data = self.settings_raw
-        if data[global_offset] != 0:
+        if data is not None and len(data) > global_offset and data[global_offset] != 0:
             buffer = int(data[global_offset])
             fav_records = data[global_offset + 1:global_offset + buffer + 1]
         else:
             fav_records = []
 
         global_offset = len(fav_records) + 3
-        if data[global_offset] != 0:
+        if data is not None and len(data) > global_offset and data[global_offset] != 0:
             buffer = int(data[global_offset])
             hidden_records = data[global_offset + 1:global_offset + buffer + 1]
         else:
@@ -315,6 +320,8 @@ class LocalParser(object):
             path = get_local_game_path(special_registry_path, launch_id)
             if path:
                 status = get_game_installed_status(path, exe, special_registry_path)
+            if not isinstance(path, str):
+                path = str(path) if path is not None else ""
 
         game_name = self._get_game_name_from_yaml(game_yaml)
 

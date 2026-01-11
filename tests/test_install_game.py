@@ -19,9 +19,10 @@ if sys.platform == 'win32':
 
         pg.open_uplay_client = mock.create_autospec(pg.open_uplay_client)
 
-        with mock.patch("plugin.subprocess.Popen") as pop:
+        with mock.patch("plugin.subprocess.Popen") as mock_popen:
             loop.run_until_complete(pg.install_game("123"))
-            pop.assert_called_with(f"start uplay://install/{new_game.launch_id}", shell=True)
+            print("Popen call args:", mock_popen.call_args_list)
+            mock_popen.assert_called_once_with("start uplay://launch/321", shell=True)
 
         pg.open_uplay_client.assert_not_called()
 

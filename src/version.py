@@ -5,7 +5,7 @@ __changelog__ = {
         - fix old uPlay links to actually get into something
         - fix the authentification flow to properly log in & refresh tokens
         - update dependencies, bump galaxy.plugin.api to latest
-        - replace all references of Ubi Club to Ubisoft+
+        - replace all references of Ubisoft Club to Ubisoft+
         - try to fix the authentification flow to prevent not being able to log in via webauth page
     """,
     "0.55.5": """

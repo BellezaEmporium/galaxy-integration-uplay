@@ -1,13 +1,13 @@
 import sys
 from dataclasses import dataclass
-from enum import EnumMeta
+from enum import Enum
 from typing import Optional
 import psutil as psutil
 
 from galaxy.api.types import LocalGameState, LocalGame, Game, LicenseInfo, LicenseType
 
 
-class System(EnumMeta):
+class System(Enum):
     WINDOWS = 1
     MACOS = 2
     LINUX = 3
@@ -19,14 +19,14 @@ elif sys.platform == 'darwin':
     SYSTEM = System.MACOS
 
 
-class GameType(EnumMeta):
+class GameType(Enum):
     New = "New"
     Legacy = "Legacy"
     Steam = "Steam"
     Origin = "Origin"
 
 
-class GameStatus(EnumMeta):
+class GameStatus(Enum):
     Unknown = "Unknown"
     NotInstalled = "NotInstalled"
     Installed = "Installed"
@@ -41,7 +41,7 @@ GameStatusTranslator = {
 }
 
 
-class ProcessType(EnumMeta):
+class ProcessType(Enum):
     Launcher = "Launcher"
     Game = "Game"
 
@@ -57,16 +57,17 @@ class UbisoftGame(object):
     type: GameType
     special_registry_path: str
     exe: str
-    owned: bool = None
+    owned: Optional[bool] = None
     considered_for_sending: bool = False
     status: Optional[GameStatus] = GameStatus.Unknown
     activation_id: str = ''
 
     def as_local_game(self):
+        status = self.status if self.status is not None else GameStatus.Unknown
         if not self.space_id:
-            return LocalGame(self.launch_id, GameStatusTranslator[self.status])
+            return LocalGame(self.launch_id, GameStatusTranslator[status])
         else:
-            return LocalGame(self.space_id, GameStatusTranslator[self.status])
+            return LocalGame(self.space_id, GameStatusTranslator[status])
 
     def as_galaxy_game(self):
         passed_id = self.space_id if self.space_id else self.launch_id

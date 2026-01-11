@@ -1,5 +1,5 @@
 galaxy.plugin.api==0.69
-aiohttp==3.8.3
+aiohttp==3.8.6
 python-dateutil==2.9.0.post0
 requests==2.31.0
 psutil==7.0.0

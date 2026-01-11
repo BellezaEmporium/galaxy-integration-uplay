@@ -111,6 +111,10 @@ class LocalClient(object):
 
     def ownership_changed(self):
         path = self.ownership_path
+        if path is None:
+            log.warning('Ownership file path is None, uplay client might not be installed')
+            self.refresh()
+            return False
         try:
             stat = os.stat(path)
         except TypeError:

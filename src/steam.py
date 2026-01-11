@@ -15,8 +15,9 @@ def _get_steam_install_path():
 
 
 def is_steam_installed():
-    if _get_steam_install_path():
-        return os.path.exists(_get_steam_install_path())
+    steam_path = _get_steam_install_path()
+    if steam_path:
+        return os.path.exists(steam_path)
     return False
 
 

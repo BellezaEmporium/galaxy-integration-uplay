@@ -1,6 +1,6 @@
 import json
 
-from stats import find_times, _normalize_last_played
+from src.stats import find_times, _normalize_last_played
 
 
 DEFAULT = None
@@ -30,7 +30,7 @@ def test_no_candidate():
         StatCardMock('StatName1', 'DisplayName mock').as_dict(),
         StatCardMock('StatName2', 'DisplayName mock').as_dict()
     ]
-    assert find_times(cards) == (DEFAULT, DEFAULT)
+    assert [find_times(statscards=card) for card in cards] == (DEFAULT, DEFAULT)
 
 
 def test_playtime_one_timestamp():
@@ -39,7 +39,7 @@ def test_playtime_one_timestamp():
         StatCardMock('StatName1', 'DisplayName mock').as_dict(),
         StatCardMock('StatName2', 'This should be catched', True, timeplayed).as_dict(),
     ]
-    assert find_times(cards) == (300, DEFAULT)
+    assert [find_times(statscards=card) for card in cards] == (300, DEFAULT)
 
 
 def test_playtime_one_zero():
@@ -47,7 +47,7 @@ def test_playtime_one_zero():
     cards = [
         StatCardMock('StatName2', 'This should be catched', True, timeplayed, unit="Seconds").as_dict(),
     ]
-    assert find_times(cards) == (int(timeplayed), DEFAULT)
+    assert [find_times(statscards=card) for card in cards] == (int(timeplayed), DEFAULT)
 
 
 def test_playtime_one_timestamp_round():
@@ -58,7 +58,7 @@ def test_playtime_one_timestamp_round():
         StatCardMock('StatName1', 'DisplayName mock').as_dict(),
         StatCardMock('StatName2', 'This should be catched', True, timeplayed_sec).as_dict(),
     ]
-    assert find_times(cards) == (timeplayed_min, DEFAULT)
+    assert [find_times(statscards=card) for card in cards] == (timeplayed_min, DEFAULT)
 
 
 def test_playtime_good_name():
@@ -68,7 +68,7 @@ def test_playtime_good_name():
         StatCardMock('StatName1', 'sdfafasf', True, 60*10).as_dict(),
         StatCardMock('TTPTotal', good_name, True, 60*t).as_dict(),
     ]
-    assert find_times(cards) == (t, DEFAULT)
+    assert [find_times(statscards=card) for card in cards] == (t, DEFAULT)
 
 
 def test_playtime_assasin_collection():
@@ -86,7 +86,7 @@ def test_playtime_assasin_collection():
         StatCardMock('storyCompletion.gameplayed.ACR', 'ACR | Story (%)').as_dict(),
         StatCardMock('timePlayed.gameplayed.ACR', 'ACR | Play Time', True, t3, 'None').as_dict()
     ]
-    assert find_times(cards) == (total_min, DEFAULT)
+    assert [find_times(statscards=card) for card in cards] == (total_min, DEFAULT)
 
 
 def test_playtime_assasin3_remastered():
@@ -99,7 +99,7 @@ def test_playtime_assasin3_remastered():
         StatCardMock('timePlayed.gameplayed.ACL', 'ACL | Play Time', True, t2, 'Seconds').as_dict(),
         StatCardMock('totalSync.gameplayed.ACL', 'ACL | Total Synchronization (%)').as_dict(),
     ]
-    assert find_times(cards) == (total_min, DEFAULT)
+    assert [find_times(statscards=card) for card in cards] == (total_min, DEFAULT)
 
 
 def test_two_modes():
@@ -111,7 +111,7 @@ def test_two_modes():
         StatCardMock('TTPPVP', 'PvP Play time', True, t2).as_dict(),
         StatCardMock('storyCompletion.gameplayed.ACR', 'ACR | Story (%)').as_dict(),
     ]
-    assert find_times(cards) == (total, DEFAULT)
+    assert [find_times(statscards=card) for card in cards] == (total, DEFAULT)
 
 
 def test_lastplayed_from_iso():
@@ -149,7 +149,7 @@ def test_gametimes_two_modes_with_last_times_hours():
         StatCardMock('TTPCoop', 'Coop Play time', True, t2, 'Minutes', newer_modify_time).as_dict(),
         StatCardMock('storyCompletion.gameplayed.ACR', 'ACR | Story (%)').as_dict(),
     ]
-    assert find_times(cards) == (total, newer_modify_timestamp)
+    assert [find_times(statscards=card) for card in cards] == (total, newer_modify_timestamp)
 
 
 def test_default_values_when_not_played():
@@ -172,7 +172,7 @@ def test_default_values_when_not_played():
     cards = [
         json.loads(json_stat)
     ]
-    assert find_times(cards) == (0, 0)
+    assert [find_times(statscards=card) for card in cards] == (0, 0)
 
 
 def test_gametimes_champions_of_anteria():
@@ -198,7 +198,7 @@ def test_gametimes_champions_of_anteria():
     cards = [
         json.loads(json_stat)
     ]
-    assert find_times(cards, space_id) == (playtime_min, 1492726805)
+    assert [find_times(statscards=card) for card in cards] == (playtime_min, 1492726805)
 
 
 def only_last_played():
@@ -209,7 +209,7 @@ def only_last_played():
         {'displayName': 'Number of Wins in Arcade PVP', 'endDate': None, 'format': 'Integer', 'lastModified': '2019-03-21T12:01:19.636Z', 'locale': 'en-GB', 'obj': '', 'ordinal': 16, 'semantic': 'Cumulative', 'sort': 'Descending', 'startDate': '2018-02-03T00:39:00.000Z', 'statName': 'APvPWins', 'unit': '', 'value': '0'},
         {'displayName': 'Number of Deaths in...rcade PVP', 'endDate': None, 'format': 'Integer', 'lastModified': last_modified, 'locale': 'en-GB', 'obj': '', 'ordinal': 9, 'semantic': 'Cumulative', 'sort': 'Descending', 'startDate': '2018-01-22T23:51:00.000Z', 'statName': 'DDeathArcadePvP', 'unit': '', 'value': '0'},
     ]
-    assert find_times(cards) == (DEFAULT, last_modified_timestamp)
+    assert [find_times(statscards=card) for card in cards] == (DEFAULT, last_modified_timestamp)
 
 
 def test_gametimes_farcry5():
@@ -230,21 +230,21 @@ def test_gametimes_farcry5():
         {'displayName': 'Time Spent in Arcade Editor', 'endDate': None, 'format': 'LongTimespan', 'lastModified': '2019-03-21T12:01:19.636Z', 'locale': 'en-GB', 'obj': '', 'ordinal': 12, 'semantic': 'Cumulative', 'sort': 'Descending', 'startDate': '2018-01-23T00:07:00.000Z', 'statName': 'TTPIGE', 'unit': 'Seconds', 'value': '0'},
         {'displayName': 'Arcade Player Level', 'endDate': None, 'format': 'Integer', 'lastModified': '1970-01-01T00:00:00.000Z', 'locale': 'en-GB', 'obj': None, 'ordinal': 14, 'semantic': 'Cumulative', 'sort': 'Descending', 'startDate': '2017-09-29T22:14:00.000Z', 'statName': 'ArcadePlayerLevel', 'unit': '', 'value': None},
     ]
-    assert find_times(cards) == (total_playtime_min, last_modified_timestamp)
+    assert [find_times(statscards=card) for card in cards] == (total_playtime_min, last_modified_timestamp)
 
 
 def test_gamestime_trackmania():
     total_playtime_sec = '2290500'
     total_playtime_min = 38175
     cards = [
-        {'statName': 'ClubPlaytime', 'displayName': 'Total play time in Club', 'value': '146203', 'format': 'LongTimespan', 'unit': 'Seconds', 'startDate': '2020-06-27T00:23:00.131Z', 'endDate': None, 'lastModified': '2021-05-30T13:19:26.788Z'},
+        {'statName': 'ubiplusPlaytime', 'displayName': 'Total play time in ubiplus', 'value': '146203', 'format': 'LongTimespan', 'unit': 'Seconds', 'startDate': '2020-06-27T00:23:00.131Z', 'endDate': None, 'lastModified': '2021-05-30T13:19:26.788Z'},
         {'statName': 'CreatePlaytime', 'displayName': 'Total play time in Create', 'value': '145648', 'format': 'LongTimespan', 'unit': 'Seconds', 'startDate': '2020-06-27T00:25:00.685Z', 'endDate': None, 'lastModified': '2021-05-24T17:18:13.616Z'},
         {'statName': 'LivePlaytime', 'displayName': 'Total play time in Live', 'value': '1498309', 'format': 'LongTimespan', 'unit': 'Seconds', 'startDate': '2020-06-27T00:19:00.358Z', 'endDate': None, 'lastModified': '2021-05-31T22:00:01.376Z'}, 
         {'statName': 'LocalPlaytime', 'displayName': 'Total play time in Local', 'value': '2875', 'format': 'LongTimespan', 'unit': 'Seconds', 'startDate': '2020-06-27T00:24:00.522Z', 'endDate': None, 'lastModified': '2020-10-29T19:44:50.242Z'}, 
         {'statName': 'SoloPlaytime', 'displayName': 'Total play time in Solo', 'value': '489734', 'format': 'LongTimespan', 'unit': 'Seconds', 'startDate': '2020-06-27T00:17:00.489Z', 'endDate': None, 'lastModified': '2021-05-31T18:44:35.555Z'}, 
         {'statName': 'TotalPlaytime', 'displayName': 'Total play time', 'value': total_playtime_sec, 'format': 'LongTimespan', 'unit': 'Seconds', 'startDate': '2020-06-27T00:13:00.766Z', 'endDate': None, 'lastModified': '2021-05-31T22:00:01.376Z'},
     ]
-    assert find_times(cards)[0] == total_playtime_min
+    assert [find_times(statscards=card) for card in cards][0] == total_playtime_min
 
 
 def test_gametime_divition_2():
@@ -259,4 +259,4 @@ def test_gametime_divition_2():
         {'displayName': 'Playtime as a Rogue', 'format': 'LongTimespan', 'statName': 'TotalPlaytimeRogue', 'unit': 'Seconds', 'value': '0'},
         {'displayName': 'Longest time spent as a Rogue', 'format': 'LongTimespan', 'statName': 'MaxRogueTime', 'unit': 'Seconds', 'value': ''}
     ]
-    assert find_times(cards)[0] == total_playtime_min
+    assert [find_times(statscards=card) for card in cards][0] == total_playtime_min

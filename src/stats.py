@@ -47,7 +47,7 @@ def _normalize_playtime(card):
 
 
 def _get_playtime_heuristics(time_stats):
-    """ Tested on most of UplayClub games
+    """ Tested on most of Uplayubiplus games
     :param time_stats:     cards with format 'longTimestamp'
     """
     TOTAL_PLAYTIME_DISPLAYNAMES = ['playtime', 'time played', 'play time', 'total play time', 'total playtime']
@@ -97,7 +97,7 @@ def _get_playtime_heuristics(time_stats):
     return time_sum
 
 
-def find_times(statscards: dict, game_id: str = None) -> Tuple[Optional[int], Optional[int]]:
+def find_times(statscards: dict, game_id: Optional[str] = None) -> Tuple[Optional[int], Optional[int]]:
     """
     result[0] - total_playtime in minutes
     result[1] - last_played as timestamp
@@ -127,5 +127,7 @@ def find_times(statscards: dict, game_id: str = None) -> Tuple[Optional[int], Op
 
     if playtime and playtime <= 0:
         playtime = 0
+    elif playtime is not None:
+        playtime = int(playtime)
 
     return playtime, last_played

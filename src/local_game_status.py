@@ -12,7 +12,6 @@ from steam import get_steam_game_status
 from local_helper import get_local_game_path, get_game_installed_status
 
 
-
 class ProcessWatcher(object):
     def __init__(self):
         self.watched_processes = []
@@ -75,8 +74,9 @@ class GameStatusNotifier(object):
         for p in psutil.process_iter(attrs=['exe'], ad_value=''):
             if game.path.lower() in p.info['exe'].lower():
                 try:
-                    if p.parent() and p.parent().exe() == game.path:
-                        return p.parent().pid
+                    parent = p.parent()
+                    if parent is not None and parent.exe() == game.path:
+                        return parent.pid
                     return p.pid
                 except (psutil.AccessDenied, psutil.NoSuchProcess):
                     pass
@@ -98,14 +98,15 @@ class GameStatusNotifier(object):
         if "disconnected" in log_line:
             return False
         if "has been started with product id" in log_line and f' {game.launch_id} (' in log_line:
-            pid = int(re.search('Game with process id ([-+]?[0-9]+) has been started', log_line).group(1))
-            if pid:
+            match = re.search('Game with process id ([-+]?[0-9]+) has been started', log_line)
+            if match:
+                pid = int(match.group(1))
                 self.process_watcher.watch_process(psutil.Process(pid), game)
                 return True
 
         #  only when clicked PLAY on Legacy game
         if game.type == GameType.Legacy:
-            if "Failed to fetch club game. Missing space id" in log_line:
+            if "Failed to fetch ubiplus game. Missing space id" in log_line:
                 return self._handle_legacy_game_log(game)
 
     def _parse_log(self, game, line_list):

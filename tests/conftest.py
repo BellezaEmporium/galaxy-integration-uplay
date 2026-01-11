@@ -1,7 +1,7 @@
 import asyncio
 from unittest.mock import patch, MagicMock
 import pytest
-import plugin
+import src.plugin as plugin
 from tests.website_mock import BackendClientMock
 
 from galaxy.api.consts import LicenseType

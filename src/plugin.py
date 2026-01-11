@@ -27,7 +27,7 @@ from local_game_status import ProcessWatcher, GameStatusNotifier
 from local_helper import get_local_game_path, get_size_at_path
 from definitions import GameStatus, UbisoftGame, GameType, System, SYSTEM
 from stats import find_times
-from consts import AUTH_JS
+from consts import AUTH_JS, UBISOFT_APPID, UBISOFT_GENOMEID
 from games_collection import GamesCollection
 from version import __version__
 from steam import is_steam_installed
@@ -48,62 +48,51 @@ class UplayPlugin(Plugin):
         self.tick_count = 0
         self.updating_games = False
         self.owned_games_sent = False
-        self.parsing_club_games = False
+        self.parsing_ubiplus_games = False
         self.parsed_local_games = False
+        self._last_successful_auth = None
 
     def auth_lost(self):
         self.lost_authentication()
 
     async def authenticate(self, stored_credentials=None):
         """Called when the plugin is started and needs to authenticate the user"""
-        # in order for Ubisoft's genome and app id to be valid, we'll sniff out the SDK file.
-        settings = "https://store.ubisoft.com/on/demandware.store/Sites-us_ubisoft-Site/en-US/UPlayConnect-GetAPISettingsJson"
 
-        async with aiohttp.ClientSession() as session:
-            async with session.get(settings) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    if 'genome-id' in data and 'app-id' in data:
-                        log.info(f"Found genome_id: {data['genome-id']}, app_id: {data['app-id']}")
-                        app_id = data['app-id']
-                        genome_id = data['genome-id']
-                    else:
-                        log.info(f"Not quite sure, seems like Ubisoft changed their code. ")
-
-        AUTH_PARAMS = {
+        params = {
             "window_title": "Login | Ubisoft WebAuth",
             "window_width": 460,
             "window_height": 690,
-            "start_uri": f"https://connect.ubisoft.com/login?appId={app_id}&genomeId={genome_id}&lang=en-US&nextUrl=https:%2F%2Fconnect.ubisoft.com%2Fready",
+            "start_uri": f"https://connect.ubisoft.com/login?appId={UBISOFT_APPID}&genomeId={UBISOFT_GENOMEID}&lang=en-US&nextUrl=https:%2F%2Fconnect.ubisoft.com%2Fready",
             "end_uri_regex": r".*rememberMeTicket.*"
         }
-
         if not stored_credentials:
-            return NextStep("web_session", AUTH_PARAMS, js=AUTH_JS)
+            return NextStep("web_session", params, js=AUTH_JS)
+        try:
+            user_data = await self.client.authorise_with_stored_credentials(stored_credentials)
+        except (AccessDenied, AuthenticationRequired):
+            raise InvalidCredentials()
+        except Exception:
+            return NextStep("web_session", params, js=AUTH_JS)
+        
+        if not isinstance(user_data, AuthenticationRequired):
+            self.local_client.initialize(user_data['userId'])
+            self.client.set_auth_lost_callback(self.auth_lost)
+            auth = Authentication(user_data.get('userId') or '', user_data.get('username') or '')
+            self._last_successful_auth = time.time()
+            return auth
         else:
-            try:
-                user_data = await self.client.authorise_with_stored_credentials(stored_credentials)
-            except (AccessDenied, AuthenticationRequired) as e:
-                log.exception(repr(e))
-                raise InvalidCredentials()
-            except Exception as e:
-                log.exception(repr(e))
-                # On any other error (e.g., UnknownError), restart web authentication
-                return NextStep("web_session", AUTH_PARAMS, js=AUTH_JS)
-            else:
-                self.local_client.initialize(user_data['userId'])
-                self.client.set_auth_lost_callback(self.auth_lost)
-                return Authentication(user_data['userId'], user_data['username'])
+            return NextStep("web_session", params, js=AUTH_JS)
 
     async def pass_login_credentials(self, step, credentials, cookies):
         """Called just after CEF authentication (called as NextStep by authenticate)"""
         url = credentials["end_uri"][len("https://connect.ubisoft.com/change_domain/"):]
-        unquoted_url = unquote(url)
-        storage_jsons = json.loads("[" + unquoted_url + "]")
+        storage_jsons = json.loads("[" + unquote(url) + "]")
         user_data = await self.client.authorise_with_local_storage(storage_jsons)
         self.local_client.initialize(user_data['userId'])
         self.client.set_auth_lost_callback(self.auth_lost)
-        return Authentication(user_data['userId'], user_data['username'])
+        auth = Authentication(user_data.get('userId') or '', user_data.get('username') or '')
+        self._last_successful_auth = time.time()
+        return auth
 
     async def get_owned_games(self):
         if not self.client.is_authenticated():
@@ -114,9 +103,9 @@ class UplayPlugin(Plugin):
             self._parse_local_game_ownership()
 
         try:
-            await self._parse_club_games()
+            await self._parse_ubiplus_games()
         except Exception as e:
-            log.exception(f"Parsing club games failed: {repr(e)}")
+            log.exception(f"Parsing ubiplus games failed: {repr(e)}")
 
         try:
             await self._parse_subscription_games()
@@ -132,28 +121,31 @@ class UplayPlugin(Plugin):
                 if game.owned]
 
     async def _parse_subscription_games(self):
-        subscription_games = []
-        sub_response = await self.client.get_subscription()
-        if not sub_response:
-            return
-        for game in sub_response['games']:
-            subscription_games.append(UbisoftGame(
-                space_id='',
-                launch_id=str(game['uplayGameId']),
-                install_id=str(game['uplayGameId']),
-                third_party_id='',
-                name=game['name'],
-                path='',
-                type=GameType.New,
-                special_registry_path='',
-                exe='',
-                status=GameStatus.Unknown,
-                owned=game['ownership'],
-                activation_id=str(game['id'])
-            ))
-        self.games_collection.extend(subscription_games)
+        """Parse Ubisoft+ subscription games list (vault)"""
+        try:
+            games_data = await self.client.get_subscription_games()
+            if not games_data:
+                return
+            # games_data is a list of product dicts
+            parsed = []
+            for prod in games_data:
+                try:
+                    launch_id = str(prod.get('ubisoftConnectGameId') or prod.get('uplayGameId') or '')
+                    if not launch_id:
+                        continue
+                    parsed.append(UbisoftGame(space_id='', launch_id=launch_id, install_id=launch_id,
+                                             third_party_id='', name=prod.get('name') or prod.get('title') or 'Unknown',
+                                             path='', type=GameType.New, special_registry_path='', exe='',
+                                             status=GameStatus.Unknown, owned=True,
+                                             activation_id=str(prod.get('id') or '')))
+                except Exception as e:
+                    log.debug(f"Skip subscription product parse error: {repr(e)}")
+            if parsed:
+                self.games_collection.extend(parsed)
+        except Exception as e:
+            log.debug(f"Subscription games parsing failed: {repr(e)}")
 
-    async def _parse_club_games(self):
+    async def _parse_ubiplus_games(self):
         def get_platforms(game):
             platform_groups = game['viewer']['meta']['ownedPlatformGroups']
             platforms = []
@@ -163,24 +155,14 @@ class UplayPlugin(Plugin):
             return platforms
 
         def parse_game(game: dict) -> UbisoftGame:
-            log.info(f"Parsed game from Club Request {game['name']}")
-            return UbisoftGame(
-                space_id=game['spaceId'],
-                launch_id='',
-                install_id='',
-                third_party_id='',
-                name=game['name'],
-                path='',
-                type=GameType.New,
-                special_registry_path='',
-                exe='',
-                status=GameStatus.Unknown,
-                owned=True
-            )
+            log.info(f"Parsed game from ubiplus Request {game['name']}")
+            return UbisoftGame(space_id=game['spaceId'], launch_id='', install_id='', third_party_id='',
+                                name=game['name'], path='', type=GameType.New, special_registry_path='', exe='',
+                                status=GameStatus.Unknown, owned=True)
 
-        if not self.parsing_club_games:
+        if not self.parsing_ubiplus_games:
             try:
-                self.parsing_club_games = True
+                self.parsing_ubiplus_games = True
                 data = await self.client.get_entitlements()
                 all_entitlements = data['entitlements'].get('nodes', [])
                 log.debug(f"Processing {len(all_entitlements)} total entitlements")
@@ -193,30 +175,30 @@ class UplayPlugin(Plugin):
                         log.warning(f"Error processing entitlement: {e}")
                         continue
                 log.debug(f"Filtered {len(games)} owned games from {len(all_entitlements)} total entitlements")
-                club_games = []
+                ubiplus_games = []
                 for game in games:
                     try:
                         platforms = get_platforms(game)
                         if "PC" in platforms:
-                            club_games.append(parse_game(game))
+                            ubiplus_games.append(parse_game(game))
                         else:
-                            log.debug(f"Skipped game from Club Request for {platforms}: {game['spaceId']}, {game['name']}")
+                            log.debug(f"Skipped game from Ubisoft+ Request for {platforms}: {game['spaceId']}, {game['name']}")
                     except TypeError as e:
                         log.warning("Raised an error: %s for game: %s" % (e, game))
                         continue
-                self.games_collection.extend(club_games)
+                self.games_collection.extend(ubiplus_games)
             except (KeyError, TypeError) as e:
-                log.error(f"Unknown response from Ubisoft during parsing club games {repr(e)}")
+                log.error(f"Unknown response from Ubisoft while trying to parse Ubisoft+ games {repr(e)}")
                 raise UnknownBackendResponse()
             except ApplicationError as e:
-                log.error(f"Encountered exception while parsing club games {repr(e)}")
+                log.error(f"Encountered exception while parsing Ubisoft+ games {repr(e)}")
                 raise e
             except Exception as e:
-                log.error(f"Encountered exception while parsing club games {repr(e)}")
+                log.error(f"Encountered exception while parsing Ubisoft+ games {repr(e)}")
             finally:
-                self.parsing_club_games = False
+                self.parsing_ubiplus_games = False
         else:
-            while self.parsing_club_games:
+            while self.parsing_ubiplus_games:
                 await asyncio.sleep(0.2)
 
     def _parse_local_games(self):
@@ -290,7 +272,7 @@ class UplayPlugin(Plugin):
             return local_games
 
     async def _add_new_games(self, games):
-        await self._parse_club_games()
+        await self._parse_ubiplus_games()
         self._parse_local_game_ownership()
         for game in games:
             if game.owned:
@@ -397,18 +379,6 @@ class UplayPlugin(Plugin):
             log.info("Failed to launch game, launching client instead.")
             self.open_uplay_client()
 
-    async def activate_game(self, activation_id):
-        if not await self.client.activate_game(activation_id):
-            log.info(f"Couldnt activate game with id {activation_id}")
-            return
-        log.info(f"Activated game with id {activation_id}")
-        timeout = time.time() + 3
-        while timeout >= time.time():
-            if self.local_client.ownership_changed():
-                # Will refresh informations in collection about the game
-                await self.get_owned_games()
-            await asyncio.sleep(0.1)
-
     if SYSTEM == System.WINDOWS:
         async def install_game(self, game_id, retry=False):
             log.debug(self.games_collection)
@@ -426,16 +396,6 @@ class UplayPlugin(Plugin):
                 if (game_id in game_ids) and game.status == GameStatus.Installed:
                     log.warning("Game already installed, launching")
                     return await self.launch_game(game_id)
-
-                if (game_id in game_ids) and not game.owned and game.activation_id and not retry:
-                    log.warning("Activating game from subscription")
-                    if not self.local_client.is_running():
-                        self.open_uplay_client()
-                        timeout = time.time() + 10
-                        while not self.local_client.is_running() and time.time() <= timeout:
-                            await asyncio.sleep(0.1)
-                    await self.activate_game(game.activation_id)
-                    asyncio.create_task(self.install_game(game_id=game_id, retry=True))
 
             # if launch_id is not known, try to launch local client instead
             self.open_uplay_client()
@@ -522,10 +482,9 @@ class UplayPlugin(Plugin):
                              subscription_discovery=SubscriptionDiscovery.AUTOMATIC)]
 
     async def prepare_subscription_games_context(self, subscription_names: List[str]) -> Any:
-        sub_games_response = await self.client.get_subscription_games()
-        if sub_games_response:
-            return [SubscriptionGame(game_title=game['name'], game_id=str(game['ubisoftConnectGameId'])) for game in
-                    sub_games_response["games"]]
+        data = await self.client.get_subscription_games()
+        if data:
+            return [SubscriptionGame(game_title=(g.get('name') or 'Unknown'), game_id=str(g.get('ubisoftConnectGameId') or g.get('uplayGameId'))) for g in data if (g.get('ubisoftConnectGameId') or g.get('uplayGameId'))]
         return None
 
     async def get_subscription_games(self, subscription_name: str, context: Any) -> AsyncGenerator[List[SubscriptionGame], None]:
@@ -624,7 +583,8 @@ class UplayPlugin(Plugin):
             if self.tick_count % 1 == 0:
                 self.refresh_game_statuses()
             if self.tick_count % 5 == 0:
-                self.game_status_notifier.launcher_log_path = self.local_client.launcher_log_path
+                if self.local_client.launcher_log_path is None:
+                    self.game_status_notifier.launcher_log_path = None
             if self.tick_count % 9 == 0:
                 self._update_local_games_status()
                 if self.local_client.ownership_changed():
