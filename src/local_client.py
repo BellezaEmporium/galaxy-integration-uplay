@@ -1,6 +1,6 @@
 from definitions import SYSTEM, System
 
-from consts import UBISOFT_REGISTRY_LAUNCHER
+from consts import UBISOFT_REGISTRY_LAUNCHER, APPDATA_PATH
 import os
 import logging as log
 
@@ -95,11 +95,29 @@ class LocalClient(object):
             if not self._is_installed:
                 log.info('Local client installed')
                 self._is_installed = True
-            self.configurations_path = os.path.join(path, "cache", "configuration", "configurations")
+            if os.access(os.path.join(APPDATA_PATH, "cache", "configuration", "configurations"), os.F_OK):
+                self.configurations_path = os.path.join(APPDATA_PATH, "cache", "configuration", "configurations")
+                log.info('Using AppData path instead of Registry path for configurations file')
+            else:
+                self.configurations_path = os.path.join(path, "cache", "configuration", "configurations")
+                log.info('Using Registry path for configurations file')
+            # This file is only present in the launcher install path found in registry
             self.launcher_log_path = os.path.join(path, "logs", "launcher_log.txt")
             if self.user_id is not None:
-                self.ownership_path = os.path.join(path, "cache", "ownership", self.user_id)
-                self.settings_path = os.path.join(path, "cache", "settings", self.user_id)
+                # Check if ownership file exists in AppData
+                if os.access(os.path.join(APPDATA_PATH, "cache", "ownership", self.user_id), os.F_OK):
+                    self.ownership_path = os.path.join(APPDATA_PATH, "cache", "ownership", self.user_id)
+                    log.info('Using AppData path instead of Registry path for ownership file')
+                else:
+                    self.ownership_path = os.path.join(path, "cache", "ownership", self.user_id)
+                    log.info('Using Registry path for ownership file')
+                # Check if settings file exists in AppData
+                if os.access(os.path.join(APPDATA_PATH, "cache", "settings", self.user_id), os.F_OK):
+                    self.settings_path = os.path.join(APPDATA_PATH, "cache", "settings", self.user_id)
+                    log.info('Using AppData path instead of Registry path for settings file')
+                else:
+                    self.settings_path = os.path.join(path, "cache", "settings", self.user_id)
+                    log.info('Using Registry path for settings file')
         else:
             if self._is_installed:
                 log.info('Local client uninstalled')

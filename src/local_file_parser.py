@@ -305,8 +305,8 @@ class LocalParser(object):
         if 'space_id' in game_yaml['root']:
             space_id = game_yaml['root']['space_id']
         # Fall back, in VERY OLD games (not Rayman Origins kind of old), it's under "app_id"
-        elif 'app_id' in game_yaml['root']:
-            space_id = game_yaml['root']['app_id']
+        # elif 'app_id' in game_yaml['root']:
+        #     space_id = game_yaml['root']['app_id']
         elif 'crash_reporting' in game_yaml['root'] and 'space_id' in game_yaml['root']['crash_reporting']:
             game_name = game_yaml['root']['crash_reporting']['space_id']
         else:

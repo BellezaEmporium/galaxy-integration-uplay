@@ -5,6 +5,8 @@ UBISOFT_REGISTRY = "SOFTWARE\\Ubisoft"
 STEAM_REGISTRY = "Software\\Valve\\Steam"
 UBISOFT_REGISTRY_LAUNCHER = "SOFTWARE\\Ubisoft\\Launcher"
 UBISOFT_REGISTRY_LAUNCHER_INSTALLS = "SOFTWARE\\Ubisoft\\Launcher\\Installs"
+LOCAL_APPDATA = os.getenv("LOCALAPPDATA")
+APPDATA_PATH = os.path.join(LOCAL_APPDATA, "Ubisoft Game Launcher")
 
 if SYSTEM == System.WINDOWS:
     UBISOFT_SETTINGS_YAML = os.path.join(os.getenv('LOCALAPPDATA', ''), 'Ubisoft Game Launcher', 'settings.yaml')
