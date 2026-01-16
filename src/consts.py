@@ -9,7 +9,7 @@ LOCAL_APPDATA = os.getenv("LOCALAPPDATA")
 APPDATA_PATH = os.path.join(LOCAL_APPDATA, "Ubisoft Game Launcher")
 
 if SYSTEM == System.WINDOWS:
-    UBISOFT_SETTINGS_YAML = os.path.join(os.getenv('LOCALAPPDATA', ''), 'Ubisoft Game Launcher', 'settings.yaml')
+    UBISOFT_SETTINGS_YAML = os.path.join(APPDATA_PATH, 'settings.yaml')
 
 UBISOFT_CONFIGURATIONS_BLACKLISTED_NAMES = ["gamename", "l1", '', 'ubisoft game', 'name']
 UBISOFT_APPID = "f68a4bb5-608a-4ff2-8123-be8ef797e0a6" # Hardcoded Ubisoft AppID from EXE
