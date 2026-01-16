@@ -45,7 +45,7 @@ class GamesCollection(list):
         launches = set([game.launch_id for game in self if game.launch_id])
 
         for game in games:
-            if game.space_id not in spaces and game.install_id not in installs and (game.launch_id not in launches and game.launch_id not in installs):
+            if game.space_id not in spaces and game.install_id not in installs and (game.launch_id not in launches and game.launch_id not in installs) and game.name != 'Unknown':
                 if game.space_id:
                     spaces.add(game.space_id)
                 log.info(f"Adding new game to collection {game.name} {game.space_id} {game.launch_id}/{game.install_id}")
