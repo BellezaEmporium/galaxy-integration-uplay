@@ -1,12 +1,16 @@
-import os
+import os, pathlib
 from definitions import System, SYSTEM
 import re
 UBISOFT_REGISTRY = "SOFTWARE\\Ubisoft"
 STEAM_REGISTRY = "Software\\Valve\\Steam"
 UBISOFT_REGISTRY_LAUNCHER = "SOFTWARE\\Ubisoft\\Launcher"
 UBISOFT_REGISTRY_LAUNCHER_INSTALLS = "SOFTWARE\\Ubisoft\\Launcher\\Installs"
-LOCAL_APPDATA = os.getenv("LOCALAPPDATA")
-APPDATA_PATH = os.path.join(LOCAL_APPDATA, "Ubisoft Game Launcher")
+LOCAL_APPDATA = os.getenv("LOCALAPPDATA", "")
+if LOCAL_APPDATA != "":
+    APPDATA_PATH = os.path.join(LOCAL_APPDATA, "Ubisoft Game Launcher")
+else:
+    # Safeguard for broken systems without LOCALAPPDATA set
+    APPDATA_PATH = os.path.join(os.path.expanduser('~'), 'AppData', 'Local', "Ubisoft Game Launcher")
 
 if SYSTEM == System.WINDOWS:
     UBISOFT_SETTINGS_YAML = os.path.join(APPDATA_PATH, 'settings.yaml')
