@@ -450,7 +450,7 @@ class UplayPlugin(Plugin):
         subprocess.Popen("start uplay://", shell=True)
 
     def open_uplay_browser(self):
-        url = 'https://uplay.ubisoft.com'
+        url = 'https://www.ubisoft.com/en-us/ubisoft-connect'
         log.info(f"Opening uplay website: {url}")
         webbrowser.open(url, autoraise=True)
 
@@ -551,12 +551,12 @@ class UplayPlugin(Plugin):
             check_frequency_delay = 0.02
 
             end_time = time.time() + client_popup_wait_time
-            hwnd = ctypes.windll.user32.FindWindowW(None, "Uplay")
+            hwnd = ctypes.windll.user32.FindWindowW(None, "Ubisoft Connect")
             while not ctypes.windll.user32.IsWindowVisible(hwnd):
                 if time.time() >= end_time:
                     log.info("Timed out post close game uplay popup")
                     break
-                hwnd = ctypes.windll.user32.FindWindowW(None, "Uplay")
+                hwnd = ctypes.windll.user32.FindWindowW(None, "Ubisoft Connect")
                 await asyncio.sleep(check_frequency_delay)
             if kill_attempt:
                 await self.shutdown_platform_client()
