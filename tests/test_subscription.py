@@ -1,5 +1,5 @@
 import pytest
-from tests.async_mock import AsyncMock
+from .async_mock import AsyncMock
 from galaxy.api.types import Subscription, SubscriptionGame, SubscriptionDiscovery
 from galaxy.api.errors import BackendError
 
@@ -55,7 +55,7 @@ async def test_subscription_not_owned(authenticated_plugin):
 
     sub_status = await authenticated_plugin.get_subscriptions()
 
-    exp_result = [Subscription(subscription_name="Uplay+", end_time=None, owned=False,
+    exp_result = [Subscription(subscription_name="Ubisoft+", end_time=None, owned=False,
                                subscription_discovery=SubscriptionDiscovery.AUTOMATIC)]
 
     assert sub_status == exp_result
@@ -67,7 +67,7 @@ async def test_subscription_owned(authenticated_plugin):
     authenticated_plugin.client.get_subscription.return_value = SUBSCRIPTION_RESPONSE_OK
 
     sub_status = await authenticated_plugin.get_subscriptions()
-    exp_result = [Subscription(subscription_name="Uplay+", owned=True, end_time=None,
+    exp_result = [Subscription(subscription_name="Ubisoft+", owned=True, end_time=None,
                                subscription_discovery=SubscriptionDiscovery.AUTOMATIC)]
 
     assert sub_status == exp_result
@@ -75,8 +75,8 @@ async def test_subscription_owned(authenticated_plugin):
 
 @pytest.mark.asyncio
 async def test_subscription_games_context_ok(authenticated_plugin):
-    authenticated_plugin.client.get_subscription = AsyncMock()
-    authenticated_plugin.client.get_subscription.return_value = SUBSCRIPTION_RESPONSE_OK
+    authenticated_plugin.client.get_subscription_games = AsyncMock(
+        return_value=SUBSCRIPTION_RESPONSE_OK['games'])
 
     sub_games_list = await authenticated_plugin.prepare_subscription_games_context(['Uplay+'])
 
@@ -86,8 +86,7 @@ async def test_subscription_games_context_ok(authenticated_plugin):
 
 @pytest.mark.asyncio
 async def test_subscription_games_context_not_owned(authenticated_plugin):
-    authenticated_plugin.client.get_subscription = AsyncMock()
-    authenticated_plugin.client.get_subscription.return_value = None
+    authenticated_plugin.client.get_subscription_games = AsyncMock(return_value=None)
 
     sub_games_list = await authenticated_plugin.prepare_subscription_games_context(['Uplay+'])
 
@@ -96,8 +95,7 @@ async def test_subscription_games_context_not_owned(authenticated_plugin):
 
 @pytest.mark.asyncio
 async def test_subscription_games_context_error(authenticated_plugin):
-    authenticated_plugin.client.get_subscription = AsyncMock()
-    authenticated_plugin.client.get_subscription.side_effect = BackendError()
+    authenticated_plugin.client.get_subscription_games = AsyncMock(side_effect=BackendError())
 
     with pytest.raises(BackendError):
         await authenticated_plugin.prepare_subscription_games_context(['Uplay+'])

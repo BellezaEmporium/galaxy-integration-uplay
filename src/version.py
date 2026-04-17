@@ -1,6 +1,12 @@
-__version__ = '0.55.6'
+__version__ = '0.55.7'
 
 __changelog__ = {
+    "0.55.7": """
+        - change folder to be parsed (more up-to-date) & fixed configuration parsing [DeDovla]
+        - change process hook names & websites to cater to new Ubisoft Connect structure [DeDovla]
+        - more safeguards to avoid crashes
+        - tests are now corresponding to the current codebase
+    """,
     "0.55.6": """
         - fix old uPlay links to actually get into something
         - fix the authentification flow to properly log in & refresh tokens

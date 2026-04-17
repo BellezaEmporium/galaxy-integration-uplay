@@ -6,7 +6,6 @@ import multiprocessing
 import subprocess
 import sys
 import webbrowser
-import aiohttp
 from yaml import scanner
 from urllib.parse import unquote
 from typing import Any, List, AsyncGenerator, Optional

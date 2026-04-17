@@ -1,10 +1,10 @@
 import pytest
 from unittest.mock import Mock, MagicMock
-from tests.async_mock import AsyncMock
+from .async_mock import AsyncMock
 
 from galaxy.api.types import GameTime
 from galaxy.api.errors import BackendNotAvailable
-from src.games_collection import GamesCollection
+from games_collection import GamesCollection
 
 
 class MockUbisoftGame():

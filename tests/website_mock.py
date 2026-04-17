@@ -1,4 +1,4 @@
-from tests.async_mock import AsyncMock
+from .async_mock import AsyncMock
 
 _AUTH_RESPONSE = '''{
     "platformType": "uplay",
@@ -68,38 +68,61 @@ class BackendClientMock(AsyncMock):
         return {
             "entitlements": [
               {
-                "productId": 4,
                 "availability": "playable",
                 "accessLevel": "owned",
-                "source": "activation",
                 "type": "game",
-                "spaceId": "97ef669a-c028-4c25-b5ff-7335aa5d806c",
-                "applicationId": "20a72d33-4b3e-47df-b88c-bbd632ed57df",
-                "playable": True,
-                "downloadable": True,
-                "protectedTimeTrial": False,
-                "grantedAt": "2020-05-01T10:55:31.000Z",
-                "playTrial": None
+                "spaceId": "6678eff0-1293-4f87-8c8c-06a4ca646068",
               },
               {
-                "productId": 46,
                 "availability": "playable",
                 "accessLevel": "owned",
-                "source": "activation",
+                "type": "game",
+                "spaceId": "f40e304d-8e8d-4343-8270-d06487c35add",
+              },
+              {
+                "availability": "playable",
+                "accessLevel": "owned",
+                "type": "game",
+                "spaceId": "6edd234a-abff-4e90-9aab-b9b9c6e49ff7",
+              },
+              {
+                "availability": "playable",
+                "accessLevel": "owned",
+                "type": "game",
+                "spaceId": "1d1273d9-2120-4e55-8d98-66e08781258e",
+              },
+              {
+                "availability": "playable",
+                "accessLevel": "owned",
                 "type": "game",
                 "spaceId": "50228b8c-bbaa-4c32-83c6-2831a1ac317c",
-                "applicationId": "15a42aaf-f5cc-47df-bbb3-f59768ac6eed",
-                "playable": True,
-                "downloadable": True,
-                "protectedTimeTrial": False,
-                "grantedAt": "2021-09-08T13:01:27.000Z",
-                "playTrial": None
+              },
+              {
+                "availability": "playable",
+                "accessLevel": "owned",
+                "type": "game",
+                "spaceId": "4bd0476b-acec-446d-b526-23a0209101ca",
               },
             ]
         }
 
-    def get_applications(self):
-        pass
+    async def get_applications(self, space_ids):
+        _ALL_GAMES = {
+            "6678eff0-1293-4f87-8c8c-06a4ca646068": "Assassin's Creed\u00ae Unity",
+            "f40e304d-8e8d-4343-8270-d06487c35add": "Far Cry\u00ae 5",
+            "6edd234a-abff-4e90-9aab-b9b9c6e49ff7": "Tom Clancy's The Division\u2122 ",
+            "1d1273d9-2120-4e55-8d98-66e08781258e": "Trackmania Turbo",
+            "50228b8c-bbaa-4c32-83c6-2831a1ac317c": "Far Cry\u00ae 3",
+            "4bd0476b-acec-446d-b526-23a0209101ca": "Far Cry\u00ae 3 Blood Dragon",
+        }
+        games = []
+        for sid in space_ids:
+            if sid in _ALL_GAMES:
+                games.append({"spaceId": sid, "name": _ALL_GAMES[sid], "platforms": [{"type": "PC"}]})
+        return {"games": games}
 
     async def get_subscription(self):
         pass
+
+    async def get_subscription_games(self):
+        return []

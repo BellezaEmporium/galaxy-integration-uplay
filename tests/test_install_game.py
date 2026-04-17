@@ -2,8 +2,9 @@ import asyncio
 import unittest.mock as mock
 import sys
 
-from tests.conftest import NewGame
-from tests.async_mock import AsyncMock
+from .conftest import NewGame
+from .async_mock import AsyncMock
+from definitions import GameStatus
 
 if sys.platform == 'win32':
     def test_install_game_space_id(create_authenticated_plugin):
@@ -11,7 +12,7 @@ if sys.platform == 'win32':
         pg = create_authenticated_plugin()
 
         new_game = NewGame()
-        new_game.status = "NotInstalled"
+        new_game.status = GameStatus.NotInstalled
 
         pg.user_can_perform_actions.return_value = True
 
@@ -22,7 +23,7 @@ if sys.platform == 'win32':
         with mock.patch("plugin.subprocess.Popen") as mock_popen:
             loop.run_until_complete(pg.install_game("123"))
             print("Popen call args:", mock_popen.call_args_list)
-            mock_popen.assert_called_once_with("start uplay://launch/321", shell=True)
+            mock_popen.assert_called_once_with("start uplay://install/321", shell=True)
 
         pg.open_uplay_client.assert_not_called()
 
@@ -32,7 +33,7 @@ if sys.platform == 'win32':
         pg = create_authenticated_plugin()
 
         new_game = NewGame()
-        new_game.status = "NotInstalled"
+        new_game.status = GameStatus.NotInstalled
 
         pg.user_can_perform_actions.return_value = True
 
@@ -52,7 +53,7 @@ if sys.platform == 'win32':
         pg = create_authenticated_plugin()
 
         new_game = NewGame()
-        new_game.status = "Installed"
+        new_game.status = GameStatus.Installed
 
         pg.user_can_perform_actions.return_value = True
 
@@ -66,7 +67,7 @@ if sys.platform == 'win32':
             loop.run_until_complete(pg.install_game("321"))
             pop.assert_not_called()
 
-        pg.launch_game.asert_called()
+        pg.launch_game.assert_called()
 
 
     def test_install_game_empty_collection(create_authenticated_plugin):
@@ -74,7 +75,7 @@ if sys.platform == 'win32':
         pg = create_authenticated_plugin()
 
         new_game = NewGame()
-        new_game.status = "NotInstalled"
+        new_game.status = GameStatus.NotInstalled
 
         pg.user_can_perform_actions.return_value = True
 
@@ -94,7 +95,7 @@ if sys.platform == 'win32':
         pg = create_authenticated_plugin()
 
         new_game = NewGame()
-        new_game.status = "NotInstalled"
+        new_game.status = GameStatus.NotInstalled
 
         pg.user_can_perform_actions.return_value = False
 

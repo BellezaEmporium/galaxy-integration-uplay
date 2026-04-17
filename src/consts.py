@@ -1,4 +1,4 @@
-import os, pathlib
+import os
 from definitions import System, SYSTEM
 import re
 UBISOFT_REGISTRY = "SOFTWARE\\Ubisoft"
@@ -19,7 +19,6 @@ UBISOFT_CONFIGURATIONS_BLACKLISTED_NAMES = ["gamename", "l1", '', 'ubisoft game'
 UBISOFT_APPID = "f68a4bb5-608a-4ff2-8123-be8ef797e0a6" # Hardcoded Ubisoft AppID from EXE
 UBISOFT_GENOMEID = "954e66a0-be1b-4aa0-9690-fb75201e4e9e" # Hardcoded Ubisoft GenomeID from EXE
 CHROME_USERAGENT = "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) ConnectPC Safari/537.36"
-UBI_USERAGENT = "Massgate_169.4.0.12978"
 
 def regex_pattern(regex):
     return ".*" + re.escape(regex) + ".*"

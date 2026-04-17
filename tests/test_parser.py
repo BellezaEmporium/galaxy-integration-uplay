@@ -3,7 +3,7 @@ import os
 
 @pytest.fixture
 def good_yaml():
-    with open(os.path.join("tests", "resources", "good.yaml"), "r") as r:
+    with open(os.path.join("tests", "resources", "good.yaml"), "rb") as r:
         return r.read()
 
 def test_yaml_decent_parse(monkeypatch, good_yaml):

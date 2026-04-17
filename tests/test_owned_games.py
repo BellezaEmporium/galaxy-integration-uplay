@@ -7,7 +7,7 @@ from galaxy.api.consts import LicenseType
 from galaxy.api.types import Game, LicenseInfo
 from galaxy.unittest.mock import AsyncMock
 
-from src.definitions import UbisoftGame, GameType, GameStatus
+from definitions import UbisoftGame, GameType, GameStatus
 
 
 @pytest.fixture
@@ -69,47 +69,21 @@ async def test_owned_games_with_unknown_response_from_ubiplus_games(authenticate
 def test_owned_games_ubiplus_only_with_multi_platform_groups(create_authenticated_plugin, backend_client, type):
     loop = asyncio.get_event_loop()
     pg = create_authenticated_plugin()
-    data = {
-            "data": {
-                "viewer": {
-                  "id": "57a84edf-09d7-448f-a18f-09c504b84637",
-                  "ownedGames": {
-                    "totalCount": 8,
-                    "nodes": [
-                      {
-                        "id": "6678eff0-1293-4f87-8c8c-06a4ca646068",
-                        "spaceId": "6678eff0-1293-4f87-8c8c-06a4ca646068",
-                        "name": "Assassin's Creed\u00ae Unity",
-                        "viewer": {
-                          "meta": {
-                            "id": "57a84edf-09d7-448f-a18f-09c504b84637-8c8d9b22-498c-45e6-80da-7cd22787c9b3",
-                            "ownedPlatformGroups": [
-                              [
-                                {
-                                  "id": "35c5c607-2717-47d9-9323-7df47c6e1c4d",
-                                  "type": type[0]
-                                },
-                                {
-                                  "id": "35c5c607-2717-47d9-9323-7df47c6e1c4d",
-                                  "type": type[1]
-                                },
-                              ],
-                              [
-                                {
-                                  "id": "35c5c607-2717-47d9-9323-7df47c6e1c4d",
-                                  "type": type[2]
-                                },
-                              ],
-                            ]
-                          }
-                        }
-                      },
-                    ]
-                  }
-                }
-            }
-        }
-    backend_client.get_entitlements = AsyncMock(return_value=data)
+    backend_client.get_entitlements = AsyncMock(return_value={
+        "entitlements": [{
+            "spaceId": "6678eff0-1293-4f87-8c8c-06a4ca646068",
+            "accessLevel": "owned",
+            "type": "game",
+            "availability": "playable"
+        }]
+    })
+    backend_client.get_applications = AsyncMock(return_value={
+        "games": [{
+            "spaceId": "6678eff0-1293-4f87-8c8c-06a4ca646068",
+            "name": "Assassin's Creed\u00ae Unity",
+            "platforms": [{"type": type[0]}, {"type": type[1]}, {"type": type[2]}]
+        }]
+    })
     expected_result = [Game(
         "6678eff0-1293-4f87-8c8c-06a4ca646068",
         "Assassin's Creed\u00ae Unity",
@@ -123,50 +97,20 @@ def test_owned_games_ubiplus_only_with_multi_platform_groups(create_authenticate
 
 @pytest.mark.asyncio
 async def test_owned_games_with_null_meta_in_viewer_ubiplus_games_response(authenticated_plugin, backend_client):
-    data = {
-        "data": {
-            "viewer": {
-                "id": "57a84edf-09d7-448f-a18f-09c504b84637",
-                "ownedGames": {
-                    "totalCount": 1,
-                    "nodes": [
-                        {
-                            "id": "GAME_ID_1",
-                            "spaceId": "GAME_ID_1",
-                            "name": "GAME_1",
-                            "viewer": {
-                                "meta": None
-                            }
-                        },
-                        {
-                            "id": "GAME_ID_2",
-                            "spaceId": "GAME_ID_2",
-                            "name": "GAME_2",
-                            "viewer": None
-                        },
-                        {
-                            "id": "GAME_ID_3",
-                            "spaceId": "GAME_ID_3",
-                            "name": "GAME_3",
-                            "viewer": {
-                                "meta": {
-                                    "ownedPlatformGroups": [
-                                        [
-                                            {
-                                              "id": "35c5c607-2717-47d9-9323-7df47c6e1c4d",
-                                              "type": "PC"
-                                            },
-                                        ],
-                                    ]
-                                }
-                            }
-                        },
-                    ]
-                }
-            }
-        }
-    }
-    backend_client.get_ubiplus_titles = AsyncMock(return_value=data)
+    backend_client.get_entitlements = AsyncMock(return_value={
+        "entitlements": [
+            {"spaceId": "GAME_ID_1", "accessLevel": "owned", "type": "game", "availability": "playable"},
+            {"spaceId": "GAME_ID_2", "accessLevel": "owned", "type": "game", "availability": "playable"},
+            {"spaceId": "GAME_ID_3", "accessLevel": "owned", "type": "game", "availability": "playable"},
+        ]
+    })
+    backend_client.get_applications = AsyncMock(return_value={
+        "games": [
+            {"spaceId": "GAME_ID_1", "name": "GAME_1", "platforms": [{"type": "CONSOLE"}]},
+            {"spaceId": "GAME_ID_2", "name": "GAME_2", "platforms": [{"type": "CONSOLE"}]},
+            {"spaceId": "GAME_ID_3", "name": "GAME_3", "platforms": [{"type": "PC"}]},
+        ]
+    })
     expected_result = [Game(
         "GAME_ID_3",
         "GAME_3",

@@ -1,29 +1,37 @@
 import asyncio
 from unittest.mock import patch, MagicMock
 import pytest
-import src.plugin as plugin
-from tests.website_mock import BackendClientMock
+import plugin
+from .website_mock import BackendClientMock
 
 from galaxy.api.consts import LicenseType
-from galaxy.api.types import Game, LicenseInfo
+from galaxy.api.types import Game, LicenseInfo, LocalGame
+from definitions import GameStatus, GameStatusTranslator, GameType
 
 class NewGame(object):
     def as_galaxy_game(self):
         passed_id = self.space_id if self.space_id else self.launch_id
         return Game(passed_id, self.name, [], LicenseInfo(LicenseType.SinglePurchase))
 
+    def as_local_game(self):
+        status = self.status if self.status is not None else GameStatus.Unknown
+        if not self.space_id:
+            return LocalGame(self.launch_id, GameStatusTranslator[status])
+        else:
+            return LocalGame(self.space_id, GameStatusTranslator[status])
+
     space_id: str = "123"
     launch_id: str = "321"
     install_id: str = "321"
     third_party_id: str = ""
-    name: str = "UbiGame"
+    name: str = "UbisoftGame"
     path: str = ""
-    type: str = "New"
+    type = GameType.New
     special_registry_path: str = ""
     exe: str = ""
     owned: bool = True
     considered_for_sending: bool = False
-    status: str = "NotInstalled"
+    status = GameStatus.NotInstalled
 
 @pytest.fixture()
 def local_client():
