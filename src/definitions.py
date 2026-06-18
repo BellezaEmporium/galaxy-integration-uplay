@@ -1,7 +1,6 @@
 import sys
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional
 import psutil as psutil
 
 from galaxy.api.types import LocalGameState, LocalGame, Game, LicenseInfo, LicenseType
@@ -57,9 +56,9 @@ class UbisoftGame(object):
     type: GameType
     special_registry_path: str
     exe: str
-    owned: Optional[bool] = None
+    owned: bool | None = None
     considered_for_sending: bool = False
-    status: Optional[GameStatus] = GameStatus.Unknown
+    status: GameStatus | None = GameStatus.Unknown
     activation_id: str = ''
 
     def as_local_game(self):
@@ -78,4 +77,4 @@ class WatchedProcess(object):
     process: psutil.Process
     timeout: float
     type: ProcessType
-    game: Optional[UbisoftGame]
+    game: UbisoftGame | None

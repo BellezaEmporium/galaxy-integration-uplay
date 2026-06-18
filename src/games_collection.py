@@ -1,15 +1,11 @@
 import logging as log
-from definitions import GameStatus
+from definitions import GameStatus, UbisoftGame
 
 
 class GamesCollection(list):
 
     def get_local_games(self):
-        local_games = []
-        for game in self:
-            if game.status in [GameStatus.Installed, GameStatus.Running]:
-                local_games.append(game)
-        return local_games
+        return [game for game in self if game.status in {GameStatus.Installed, GameStatus.Running}]
 
     def append(self, _):
         AssertionError('Method not available. Use extend')
@@ -40,31 +36,41 @@ class GamesCollection(list):
                     game_in_list.activation_id = game.activation_id
 
     def extend(self, games):
-        spaces = set([game.space_id for game in self if game.space_id])
-        installs = set([game.install_id for game in self if game.install_id])
-        launches = set([game.launch_id for game in self if game.launch_id])
+        spaces = {game.space_id for game in self if game.space_id}
+        installs = {game.install_id for game in self if game.install_id}
+        launches = {game.launch_id for game in self if game.launch_id}
 
         for game in games:
-            if game.space_id not in spaces and game.install_id not in installs and (game.launch_id not in launches and game.launch_id not in installs) and game.name != 'Unknown':
+            is_new = (
+                game.space_id not in spaces
+                and game.install_id not in installs
+                and game.launch_id not in launches
+                and game.launch_id not in installs
+                and game.name != "Unknown"
+            )
+            if is_new:
                 if game.space_id:
                     spaces.add(game.space_id)
+                if game.install_id:
+                    installs.add(game.install_id)
+                if game.launch_id:
+                    launches.add(game.launch_id)
                 log.info(f"Adding new game to collection {game.name} {game.space_id} {game.launch_id}/{game.install_id}")
                 super().append(game)
-            elif game.space_id in spaces or game.install_id in installs or game.launch_id in launches or game.launch_id in installs:
+            else:
                 self._extend_existing_game_entry(game)
 
-    def __getitem__(self, key):
-        if type(key) == int:
+    def __getitem__(self, key: int | str) -> UbisoftGame:
+        if isinstance(key, int):
             return super().__getitem__(key)
-        elif type(key) == str:
-            for i in self:
-                if key in (i.launch_id, i.space_id):
-                    return i
-            raise KeyError(f'No game with id: {key}')
-        else:
-            raise TypeError(f'Excpected str or int, got {type(key)}')
+        if isinstance(key, str):
+            for game in self:
+                if key in (game.launch_id, game.space_id):
+                    return game
+            raise KeyError(f"No game with id: {key}")
+        raise TypeError(f"Expected str or int, got {type(key).__name__}")
 
-    def get(self, key):
+    def get(self, key: int | str) -> UbisoftGame | None:
         try:
             return self.__getitem__(key)
         except (KeyError, TypeError):

@@ -1,6 +1,6 @@
 import json
 
-from stats import find_times, _normalize_last_played
+from src.stats import find_times, _normalize_last_played
 
 
 DEFAULT = None

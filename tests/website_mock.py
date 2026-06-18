@@ -1,4 +1,4 @@
-from .async_mock import AsyncMock
+from unittest.mock import AsyncMock
 
 _AUTH_RESPONSE = '''{
     "platformType": "uplay",

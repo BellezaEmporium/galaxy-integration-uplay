@@ -67,18 +67,15 @@ class HttpClient:
             if kwargs['headers'][key] is None:
                 del kwargs['headers'][key]
 
-    async def _ensure_request_headers(self, kwargs, cached_app_id, sso_id):
-        """Ensure required headers are present for the request."""
-        if 'Ubi-AppId' not in kwargs['headers'] or not kwargs['headers']['Ubi-AppId']:
-            kwargs['headers']['Ubi-AppId'] = UBISOFT_APPID
-        
-        url_str = kwargs['headers'].get('_url', '')
+    def _ensure_request_headers(self, headers: dict[str, str], url_str: str, cached_app_id: str | None, sso_id: str | None) -> None:
+        if not headers.get("Ubi-AppId"):
+            headers["Ubi-AppId"] = cached_app_id or UBISOFT_APPID
+
         if sso_id and any(domain in url_str for domain in UBISOFT_DOMAINS):
-            kwargs['headers']['Ubi-SsoId'] = sso_id
-        
-        if any(domain in url_str for domain in UBIAPI_DOMAINS):
-            if 'Content-Type' not in kwargs['headers']:
-                kwargs['headers']['Content-Type'] = 'application/json'
+            headers["Ubi-SsoId"] = sso_id
+
+        if any(domain in url_str for domain in UBIAPI_DOMAINS) and "Content-Type" not in headers:
+            headers["Content-Type"] = "application/json"
                 
     def _is_html_content(self, content_type):
         """Check if content type indicates HTML."""
@@ -143,7 +140,7 @@ class HttpClient:
         url_str = args[0] if args else kwargs.get('url', '')
         kwargs['headers']['_url'] = url_str
         
-        await self._ensure_request_headers(kwargs, cached_app_id, sso_id)
+        self._ensure_request_headers(kwargs['headers'], url_str=url_str, cached_app_id=cached_app_id, sso_id=sso_id)
         del kwargs['headers']['_url']
 
         try:

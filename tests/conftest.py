@@ -1,12 +1,23 @@
-import asyncio
 from unittest.mock import patch, MagicMock
 import pytest
+import pytest_asyncio
 import plugin
 from .website_mock import BackendClientMock
 
 from galaxy.api.consts import LicenseType
 from galaxy.api.types import Game, LicenseInfo, LocalGame
 from definitions import GameStatus, GameStatusTranslator, GameType
+
+def _credentials():
+    return {
+        "ticket": "ticket",
+        "sessionId": "session_id",
+        "rememberMeTicket": "remember_me",
+        "userId": "user_id",
+        "username": "user_name",
+        "refreshTime": "9999999999",
+    }
+
 
 class NewGame(object):
     def as_galaxy_game(self):
@@ -55,29 +66,17 @@ def create_plugin(local_client, backend_client):
                 return plugin.UplayPlugin(MagicMock(), MagicMock(), None)
     return function
 
+@pytest_asyncio.fixture
+async def authenticated_plugin(create_plugin):
+    plugin = create_plugin()
+    await plugin.authenticate(_credentials())
+    return plugin
 
-@pytest.fixture()
+
+@pytest.fixture
 def create_authenticated_plugin(create_plugin):
-
-    def function():
-        loop = asyncio.get_event_loop()
-
-        pg = create_plugin()
-        pg.user_can_perform_actions = MagicMock()
-        pg.games_collection.get_local_games = MagicMock()
-        pg._game_ownership_is_glitched = MagicMock()
-        pg.add_game = MagicMock()
-
-        credentials = {
-            "cookie_jar": "COOKIE_JAR",
-            "access_token": "ACCESS_TOKEN"}
-        loop.run_until_complete(pg.authenticate(credentials))
-
-        return pg
-
-    return function
-
-
-@pytest.fixture()
-def authenticated_plugin(create_authenticated_plugin):
-    return create_authenticated_plugin()
+    async def factory():
+        plugin = create_plugin()
+        await plugin.authenticate(_credentials())
+        return plugin
+    return factory

@@ -1,6 +1,5 @@
 import pytest
-from unittest.mock import Mock, MagicMock
-from .async_mock import AsyncMock
+from unittest.mock import Mock, MagicMock, AsyncMock
 
 from galaxy.api.types import GameTime
 from galaxy.api.errors import BackendNotAvailable

@@ -1,5 +1,5 @@
 import pytest
-from .async_mock import AsyncMock
+from unittest.mock import AsyncMock
 from galaxy.api.types import Subscription, SubscriptionGame, SubscriptionDiscovery
 from galaxy.api.errors import BackendError
 

@@ -1,11 +1,9 @@
-import asyncio
 import json
-from unittest.mock import Mock
+from unittest.mock import Mock, AsyncMock
 
 import pytest
 from galaxy.api.consts import LicenseType
 from galaxy.api.types import Game, LicenseInfo
-from galaxy.unittest.mock import AsyncMock
 
 from definitions import UbisoftGame, GameType, GameStatus
 
@@ -23,12 +21,10 @@ def result_owned_ubiplus_games():
     ]
 
 
-def test_owned_games_ubiplus_only(create_authenticated_plugin, result_owned_ubiplus_games):
-    loop = asyncio.get_event_loop()
-    pg = create_authenticated_plugin()
-
-    result = loop.run_until_complete(pg.get_owned_games())
-    assert result == result_owned_ubiplus_games
+async def test_owned_games_ubiplus_only(create_authenticated_plugin, result_owned_ubiplus_games):
+    pg = await create_authenticated_plugin()
+    games = await pg.get_owned_games()
+    assert games == result_owned_ubiplus_games
 
 
 @pytest.mark.parametrize("response", [
@@ -66,9 +62,8 @@ async def test_owned_games_with_unknown_response_from_ubiplus_games(authenticate
     ("STADIA", "PC", "STADIA"),
     ("STADIA", "STADIA", "PC"),
 ])
-def test_owned_games_ubiplus_only_with_multi_platform_groups(create_authenticated_plugin, backend_client, type):
-    loop = asyncio.get_event_loop()
-    pg = create_authenticated_plugin()
+async def test_owned_games_ubiplus_only_with_multi_platform_groups(create_authenticated_plugin, backend_client, type):
+    pg = await create_authenticated_plugin()
     backend_client.get_entitlements = AsyncMock(return_value={
         "entitlements": [{
             "spaceId": "6678eff0-1293-4f87-8c8c-06a4ca646068",
@@ -91,7 +86,7 @@ def test_owned_games_ubiplus_only_with_multi_platform_groups(create_authenticate
         LicenseInfo(LicenseType.SinglePurchase)
     )]
 
-    result = loop.run_until_complete(pg.get_owned_games())
+    result = await pg.get_owned_games()
     assert result == expected_result
 
 

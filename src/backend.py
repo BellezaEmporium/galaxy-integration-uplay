@@ -1,20 +1,19 @@
-from datetime import datetime
+from datetime import datetime, timezone
+import asyncio
 import json
 import logging as log
-from galaxy.http import create_tcp_connector, create_client_session
-import dateutil.parser
-
-import aiohttp
-import asyncio
 import time
 from functools import wraps
 
-from galaxy.api.errors import AuthenticationRequired, AccessDenied, UnknownError
+import aiohttp
+import dateutil.parser
+from galaxy.http import create_tcp_connector, create_client_session
 
+from galaxy.api.errors import AuthenticationRequired, AccessDenied, UnknownError
 from consts import CHROME_USERAGENT, UBISOFT_APPID, UBISOFT_GENOMEID
 from http_client import HttpClient
 
-# Constants
+
 REFRESH_BUFFER_SECONDS = 300
 KEEPALIVE_INTERVAL = 300
 KEEPALIVE_JITTER = 10
@@ -25,8 +24,8 @@ UBI_API_BASE = "https://public-ubiservices.ubi.com"
 UBI_SESSIONS_URL = f"{UBI_API_BASE}/v3/profiles/sessions"
 UBI_PROFILE_URL = f"{UBI_API_BASE}/v3/profiles/me"
 
+
 def _handle_auth_errors(func):
-    """Decorator to handle common authentication errors."""
     @wraps(func)
     async def wrapper(*args, **kwargs):
         try:
@@ -35,9 +34,9 @@ def _handle_auth_errors(func):
             status = error.status
             if status == 400:
                 raise AuthenticationRequired("Bad request during authentication")
-            elif status == 401:
+            if status == 401:
                 raise AuthenticationRequired("Token expired or invalid")
-            elif status == 403:
+            if status == 403:
                 raise AccessDenied("Access denied during authentication")
             raise UnknownError(f"Unexpected status code: {status}")
     return wrapper
@@ -47,8 +46,7 @@ class BackendClient:
     def __init__(self, plugin):
         self._plugin = plugin
         self._auth_lost_callback = None
-        
-        # Auth state
+
         self.token = None
         self.session_id = None
         self.refresh_token = None
@@ -56,18 +54,25 @@ class BackendClient:
         self.user_id = None
         self.user_name = None
         self.sso_id = None
-        
-        # State flags
-        self._refresh_lock = asyncio.Lock()
+
+        self._refresh_lock = None
         self._keepalive_task = None
         self._connection_stable = True
+        self._session = None
+        self._http_client = None
 
-        self._session = self._create_session()
-        self._http_client = HttpClient(self._session)
-        self._start_keepalive()
+    async def _ensure_async_state(self):
+        if self._refresh_lock is None:
+            self._refresh_lock = asyncio.Lock()
+
+        if self._session is None or self._session.closed:
+            self._session = self._create_session()
+            self._http_client = HttpClient(self._session)
+
+        if self._keepalive_task is None or self._keepalive_task.done():
+            self._keepalive_task = asyncio.create_task(self._connection_keepalive())
 
     def _create_session(self):
-        """Create and configure HTTP session."""
         connector = create_tcp_connector(limit=30, keepalive_timeout=60)
         headers = {
             "User-Agent": CHROME_USERAGENT,
@@ -78,25 +83,17 @@ class BackendClient:
             connector=connector,
             timeout=aiohttp.ClientTimeout(total=120),
             cookie_jar=None,
-            headers=headers
+            headers=headers,
         )
 
-    def _start_keepalive(self):
-        """Start the keepalive background task."""
-        try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                self._keepalive_task = asyncio.ensure_future(self._connection_keepalive())
-        except Exception:
-            pass
-
     def _cache_id(self, data, api_key, data_key, attr_name, cache_key, current_time):
-        """Cache an ID value."""
         if api_key not in data or getattr(self, attr_name):
             return
         id_value = data[api_key]
         log.info(f"Found {data_key}: {id_value}")
-        self._plugin.persistent_cache[cache_key] = json.dumps({data_key: id_value, "timestamp": current_time})
+        self._plugin.persistent_cache[cache_key] = json.dumps(
+            {data_key: id_value, "timestamp": current_time}
+        )
         self._plugin.push_cache()
         setattr(self, attr_name, id_value)
 
@@ -107,13 +104,13 @@ class BackendClient:
         return UBISOFT_GENOMEID
 
     async def ensure_app_id_header(self):
-        """Ensure the Ubi-AppId header is set."""
-        if not self._session.headers.get('Ubi-AppId'):
-            app_id = UBISOFT_APPID
-            self._session.headers['Ubi-AppId'] = app_id
-        return self._session.headers['Ubi-AppId']
+        await self._ensure_async_state()
+        if self._session is not None and not self._session.headers.get("Ubi-AppId"):
+            self._session.headers["Ubi-AppId"] = UBISOFT_APPID
+        return self._session.headers["Ubi-AppId"] if self._session is not None else None
 
     async def __aenter__(self):
+        await self._ensure_async_state()
         await self.ensure_app_id_header()
         return self
 
@@ -124,10 +121,17 @@ class BackendClient:
                 await self._keepalive_task
             except asyncio.CancelledError:
                 pass
-        
-        async with self._refresh_lock:
-            pass  # Wait for any pending refresh
-        await self._session.close()
+
+        if self._refresh_lock is not None:
+            async with self._refresh_lock:
+                pass
+
+        if self._session is not None and not self._session.closed:
+            await self._session.close()
+
+        self._keepalive_task = None
+        self._http_client = None
+        self._session = None
 
     def set_auth_lost_callback(self, callback):
         self._auth_lost_callback = callback
@@ -136,14 +140,13 @@ class BackendClient:
         return self.token is not None
 
     def _build_headers(self, *, include_auth=False, extra=None):
-        """Build request headers with optional auth."""
         headers = {
             "User-Agent": CHROME_USERAGENT,
             "Accept": "*/*",
+            "Ubi-AppId": UBISOFT_APPID,
+            "Ubi-GenomeId": UBISOFT_GENOMEID,
         }
-        headers["Ubi-AppId"] = UBISOFT_APPID
-        headers["Ubi-GenomeId"] = UBISOFT_GENOMEID
-        
+
         if include_auth:
             if self.token:
                 headers["Authorization"] = f"Ubi_v1 t={self.token}"
@@ -151,31 +154,38 @@ class BackendClient:
                 headers["Ubi-SessionId"] = self.session_id
             if self.sso_id:
                 headers["Ubi-SsoId"] = self.sso_id
-        
+
         if extra:
             headers.update({k: v for k, v in extra.items() if v is not None})
+
         return headers
 
     def _update_session_headers(self):
-        """Update session headers with current auth state."""
+        if self._session is None or self._session.closed:
+            return
+
         updates = self._build_headers(include_auth=True)
         for key, value in updates.items():
             self._session.headers[key] = value
 
     async def _do_request(self, method, *args, **kwargs):
-        """Wrapper around http_client.do_request."""
-        return await self._http_client.do_request(
-            method, *args,
+        await self._ensure_async_state()
+        client = self._http_client
+        if client is None:
+            raise UnknownError("HTTP client is not initialized")
+
+        return await client.do_request(
+            method,
+            *args,
             cached_app_id=UBISOFT_APPID,
             sso_id=self.sso_id,
-            **kwargs
+            **kwargs,
         )
 
     async def _auth_request(self, method, url, *, token_prefix="Ubi_v1", use_remember_me=False, **kwargs):
-        """Perform an authenticated request to session endpoints."""
         token = self.refresh_token if use_remember_me else self.token
         prefix = "rm_v1" if use_remember_me else token_prefix
-        
+
         headers = {
             "Authorization": f"{prefix} t={token}",
             "Ubi-AppId": UBISOFT_APPID,
@@ -190,57 +200,66 @@ class BackendClient:
         if UBISOFT_GENOMEID:
             headers["Ubi-GenomeId"] = UBISOFT_GENOMEID
         if use_remember_me:
-            headers.update({"Origin": "https://connect.cdn.ubisoft.com", "Referer": "https://connect.cdn.ubisoft.com"})
-        
-        headers.update(kwargs.pop('extra_headers', {}))
+            headers.update({
+                "Origin": "https://connect.cdn.ubisoft.com",
+                "Referer": "https://connect.cdn.ubisoft.com",
+            })
+
+        headers.update(kwargs.pop("extra_headers", {}))
         return await self._do_request(method, url, headers=headers, **kwargs)
 
     def _should_refresh_token(self):
-        """Check if token should be refreshed."""
         if not self.refresh_token:
             return False
         try:
             refresh_time_int = int(self.refresh_time) if self.refresh_time else 0
         except (ValueError, TypeError):
             return False
-        
+
         if refresh_time_int <= 0:
             return False
-        return int(datetime.now().timestamp()) > (refresh_time_int - REFRESH_BUFFER_SECONDS)
+
+        return int(datetime.now(timezone.utc).timestamp()) > (
+            refresh_time_int - REFRESH_BUFFER_SECONDS
+        )
 
     async def _refresh_auth(self):
-        """Refresh authentication tokens with proper locking."""
+        if self._refresh_lock is None:
+            self._refresh_lock = asyncio.Lock()
         async with self._refresh_lock:
             await self._do_refresh()
 
     async def _do_refresh(self):
-        """Execute token refresh logic."""
-        # Try PUT method first (session refresh)
-        if await self._try_session_refresh('put'):
+        if await self._try_session_refresh("put"):
             return
 
-        # Try POST with current ticket
         try:
             await self._refresh_via_post(use_remember_me=False)
             return
         except Exception as e:
             log.debug(f"Ticket refresh failed: {e}")
 
-        # Fall back to remember-me token
         if self.refresh_token:
             await self._refresh_via_post(use_remember_me=True)
             await self._refresh_via_post(use_remember_me=False)
         else:
             raise AuthenticationRequired("No refresh token available")
 
-    async def _try_session_refresh(self, method='put'):
-        """Try to refresh via session endpoint."""
+    async def _try_session_refresh(self, method="put"):
         if not all([self.token, self.session_id, self.user_id]):
             return False
         try:
-            extra = {"Referer": "https://store.ubi.com/upc/login", "Origin": "https://store.ubi.com"}
-            response = await self._auth_request(method, UBI_SESSIONS_URL, json={"rememberMe": True}, extra_headers=extra)
-            if response and response.get('ticket'):
+            extra = {
+                "Referer": "https://store.ubi.com/upc/login",
+                "Origin": "https://store.ubi.com",
+            }
+            response = await self._auth_request(
+                method,
+                UBI_SESSIONS_URL,
+                json={"rememberMe": True},
+                extra_headers=extra,
+            )
+            if response and response.get("ticket"):
                 self._apply_auth_response(response)
                 self._plugin.store_credentials(self.get_credentials())
                 log.info(f"Session refresh via {method.upper()} successful")
@@ -251,113 +270,100 @@ class BackendClient:
 
     @_handle_auth_errors
     async def _refresh_via_post(self, *, use_remember_me=False):
-        """Refresh using POST to sessions endpoint."""
         label = "remember-me" if use_remember_me else "ticket"
         log.debug(f"Refreshing via {label}")
-        
+
         payload = {"rememberMe": True} if use_remember_me else None
-        response = await self._auth_request('post', UBI_SESSIONS_URL, use_remember_me=use_remember_me, json=payload)
-        
+        response = await self._auth_request(
+            "post",
+            UBI_SESSIONS_URL,
+            use_remember_me=use_remember_me,
+            json=payload,
+        )
+
         if not response:
             raise UnknownError("Empty response from authentication server")
-        
+
         await self._handle_auth_response(response)
         self._plugin.store_credentials(self.get_credentials())
         log.debug(f"{label.capitalize()} refresh successful")
 
     def _apply_auth_response(self, response):
-        """Apply authentication response to state."""
-        self.token = response['ticket']
-        self.session_id = response.get('sessionId', self.session_id)
-        self.user_id = response.get('userId', self.user_id)
-        if response.get('rememberMeTicket'):
-            self.refresh_token = response['rememberMeTicket']
-        
-        expiration = response.get('expiration')
+        self.token = response["ticket"]
+        self.session_id = response.get("sessionId", self.session_id)
+        self.user_id = response.get("userId", self.user_id)
+        if response.get("rememberMeTicket"):
+            self.refresh_token = response["rememberMeTicket"]
+
+        expiration = response.get("expiration")
         if expiration:
             self.refresh_time = self._parse_expiration(expiration)
-        
+
         self._update_session_headers()
 
     def _parse_expiration(self, expiration_str):
-        """Parse expiration timestamp."""
         try:
-            exp = expiration_str[:26] + 'Z'
-            for fmt in ("%Y-%m-%dT%H:%M:%S.%fZ", "%Y-%m-%dT%H:%M:%SZ"):
-                try:
-                    return int(datetime.strptime(exp, fmt).timestamp())
-                except ValueError:
-                    continue
-        except Exception:
-            pass
-        return int(time.time()) + 3600
+            return int(datetime.fromisoformat(expiration_str).timestamp())
+        except (ValueError, AttributeError):
+            return int(time.time()) + 3600
 
     async def _handle_auth_response(self, response):
-        """Handle full authorization response with time calculation."""
-        server_time = dateutil.parser.parse(response['serverTime'])
-        expiration = dateutil.parser.parse(response['expiration'])
-        refresh_time = datetime.now() + (expiration - server_time)
-        response['refreshTime'] = round(refresh_time.timestamp())
+        server_time = dateutil.parser.parse(response["serverTime"])
+        expiration = dateutil.parser.parse(response["expiration"])
+        refresh_time = datetime.now(timezone.utc) + (expiration - server_time)
+        response["refreshTime"] = round(refresh_time.timestamp())
         await self.restore_credentials(response, refresh_remember_me=False)
 
     async def restore_credentials(self, data, refresh_remember_me=True):
-        """Restore credentials from data."""
-        self.token = data['ticket']
-        self.session_id = data['sessionId']
-        self.user_id = data['userId']
-        self.user_name = data.get('username', self.user_name)
-        self.refresh_time = data.get('refreshTime', '0')
-        if data.get('rememberMeTicket'):
-            self.refresh_token = data['rememberMeTicket']
+        await self._ensure_async_state()
+
+        self.token = data["ticket"]
+        self.session_id = data["sessionId"]
+        self.user_id = data["userId"]
+        self.user_name = data.get("username", self.user_name)
+        self.refresh_time = data.get("refreshTime", "0")
+        if data.get("rememberMeTicket"):
+            self.refresh_token = data["rememberMeTicket"]
+
+        self._update_session_headers()
 
         if refresh_remember_me and self.refresh_token:
             await self._refresh_via_post(use_remember_me=True)
-        
-        self._update_session_headers()
-        
-        if not self._keepalive_task or self._keepalive_task.done():
-            try:
-                self._keepalive_task = asyncio.ensure_future(self._connection_keepalive())
-            except Exception:
-                pass
 
     def get_credentials(self):
-        """Get current credentials."""
         creds = {
             "ticket": self.token,
             "sessionId": self.session_id,
             "rememberMeTicket": self.refresh_token,
             "userId": self.user_id,
-            "refreshTime": self.refresh_time
+            "refreshTime": self.refresh_time,
         }
         if self.user_name:
             creds["username"] = self.user_name
         return creds
 
     async def authorise_with_stored_credentials(self, credentials):
-        """Authorize using stored credentials."""
         await self.restore_credentials(credentials)
-        user_data = await self.get_user_data() if not (self.user_name and self.user_id) else {"username": self.user_name, "userId": self.user_id}
-        
-        try:
-            asyncio.ensure_future(self._try_session_refresh('put'))
-            self._plugin.store_credentials(self.get_credentials())
-            return user_data
-        except Exception as e:
-            log.error(f"Error starting token refresh: {e}")
-            raise AuthenticationRequired()
+        user_data = (
+            await self.get_user_data()
+            if not (self.user_name and self.user_id)
+            else {"username": self.user_name, "userId": self.user_id}
+        )
+
+        asyncio.create_task(self._try_session_refresh("put"))
+        self._plugin.store_credentials(self.get_credentials())
+        return user_data
 
     async def authorise_with_local_storage(self, storage_jsons):
-        """Authorize using local browser storage data."""
         user_data = {}
-        keys = ['userId', 'nameOnPlatform', 'ticket', 'rememberMeTicket', 'sessionId']
+        keys = ["userId", "nameOnPlatform", "ticket", "rememberMeTicket", "sessionId"]
         for json_ in storage_jsons:
             for key in keys:
                 if key in json_:
                     user_data[key] = json_[key]
 
-        user_data['userId'] = user_data.pop('userId')
-        user_data['username'] = user_data.pop('nameOnPlatform')
+        user_data["userId"] = user_data.pop("userId")
+        user_data["username"] = user_data.pop("nameOnPlatform")
 
         await self.restore_credentials(user_data)
         await self.post_sessions()
@@ -365,7 +371,6 @@ class BackendClient:
         return user_data
 
     async def _connection_keepalive(self):
-        """Background task to keep connection alive."""
         while True:
             try:
                 if not self.token:
@@ -374,7 +379,6 @@ class BackendClient:
 
                 await asyncio.sleep(5 if not self._connection_stable else 0)
 
-                # Check if refresh needed
                 now = int(time.time())
                 try:
                     refresh_time_int = int(self.refresh_time) if self.refresh_time else now + 3600
@@ -388,9 +392,8 @@ class BackendClient:
                     except Exception as e:
                         log.warning(f"Preemptive refresh failed: {e}")
 
-                # Ping
                 try:
-                    await self._do_request('get', UBI_PROFILE_URL, headers={'Ubi-AppId': UBISOFT_APPID})
+                    await self._do_request("get", UBI_PROFILE_URL, headers={"Ubi-AppId": UBISOFT_APPID})
                     self._connection_stable = True
                 except Exception:
                     self._connection_stable = False
@@ -405,59 +408,78 @@ class BackendClient:
                 await asyncio.sleep(60)
 
     async def get_user_data(self):
-        """Get user data from Ubisoft API."""
         try:
             await self.ensure_app_id_header()
-            headers = self._build_headers(include_auth=True, extra={
-                'Content-Type': 'application/json',
-                'Ubi-RequestedPlatformType': 'uplay',
-                'Origin': 'https://connect.cdn.ubisoft.com',
-            })
-            
-            user_data = await self._do_request('get', UBI_PROFILE_URL, add_to_headers=headers)
+            headers = self._build_headers(
+                include_auth=True,
+                extra={
+                    "Content-Type": "application/json",
+                    "Ubi-RequestedPlatformType": "uplay",
+                    "Origin": "https://connect.cdn.ubisoft.com",
+                },
+            )
+            user_data = await self._do_request("get", UBI_PROFILE_URL, add_to_headers=headers)
             if user_data:
-                self.user_id = user_data.get('userId')
-                self.user_name = user_data.get('username')
+                self.user_id = user_data.get("userId")
+                self.user_name = user_data.get("username")
                 return user_data
         except Exception as e:
             log.error(f"Error fetching user data: {e}")
         return {"username": self.user_name, "userId": self.user_id}
 
     async def get_friends(self):
-        return await self._do_request('get', 'https://api-ubiservices.ubi.com/v2/profiles/me/friends')
+        return await self._do_request("get", "https://api-ubiservices.ubi.com/v2/profiles/me/friends")
 
     async def get_entitlements(self):
         await self._refresh_auth()
-        headers = self._build_headers(include_auth=True, extra={'ubi-localecode': 'en-US'})
-        return await self._do_request('get', f'{UBI_API_BASE}/v1/profiles/me/global/ubiconnect/entitlement/api/entitlements', headers=headers)
+        headers = self._build_headers(include_auth=True, extra={"ubi-localecode": "en-US"})
+        return await self._do_request(
+            "get",
+            f"{UBI_API_BASE}/v1/profiles/me/global/ubiconnect/entitlement/api/entitlements",
+            headers=headers,
+        )
 
     async def get_game_stats(self, space_id):
-        headers = {'Ubi-RequestedPlatformType': "uplay", 'Ubi-LocaleCode': "en-US"}
+        headers = {"Ubi-RequestedPlatformType": "uplay", "Ubi-LocaleCode": "en-US"}
         try:
-            return await self._do_request('get', f"{UBI_API_BASE}/v1/profiles/{self.user_id}/statscard?spaceId={space_id}", add_to_headers=headers)
+            return await self._do_request(
+                "get",
+                f"{UBI_API_BASE}/v1/profiles/{self.user_id}/stats?spaceId={space_id}",
+                add_to_headers=headers,
+            )
         except UnknownError:
             return {}
 
     async def get_applications(self, spaces):
-        space_string = ','.join(s for s in spaces)
-        return await self._do_request('get', f"{UBI_API_BASE}/v1/spaces/global/ubiconnect/games/api/catalog?spaceIds={space_string}", add_to_headers={'Ubi-RequestedPlatformType': 'uplay'})
+        space_string = ",".join(s for s in spaces)
+        return await self._do_request(
+            "get",
+            f"{UBI_API_BASE}/v1/spaces/global/ubiconnect/games/api/catalog?spaceIds={space_string}",
+            add_to_headers={"Ubi-RequestedPlatformType": "uplay"},
+        )
 
     async def get_configuration(self):
-        return await self._do_request('get', f'{UBI_API_BASE}/v1/spaces/7e8070f7-8f76-4122-8ffc-63b361c3ab9e/parameters')
+        return await self._do_request(
+            "get",
+            f"{UBI_API_BASE}/v1/spaces/7e8070f7-8f76-4122-8ffc-63b361c3ab9e/parameters",
+        )
 
     async def post_sessions(self):
-        return await self._do_request('post', UBI_SESSIONS_URL)
+        return await self._do_request("post", UBI_SESSIONS_URL)
 
     async def get_subscription(self):
-        """Get subscription status."""
         if not self.token:
             return None
         try:
-            await self._try_session_refresh('put')
-            headers = self._build_headers(include_auth=True, extra={'Content-Type': 'application/json'})
-            api = await self._do_request('get', f"https://ess.ubi.com/v2/account/{self.user_id}?fields[]=currentSubscription&subscriptionType=ibex", add_to_headers=headers)
-            
-            sub = api.get('currentSubscription')
+            await self._try_session_refresh("put")
+            headers = self._build_headers(include_auth=True, extra={"Content-Type": "application/json"})
+            api = await self._do_request(
+                "get",
+                f"https://ess.ubi.com/v2/account/{self.user_id}?fields[]=currentSubscription&subscriptionType=ibex",
+                add_to_headers=headers,
+            )
+
+            sub = api.get("currentSubscription")
             if sub:
                 log.info("Subscription found")
                 return api.get("subscriptionType", "premium")
@@ -467,13 +489,18 @@ class BackendClient:
             return None
 
     async def get_subscription_games(self):
-        """Get subscription games."""
         try:
             if not await self.get_subscription():
                 return []
-            
-            games = await self._do_request('get', f"{UBI_API_BASE}/v1/applications/global/webservices/ubisoftplus/vault/products?storefront=us", 
-                                           add_to_headers={'Ubi-RequestedPlatformType': 'uplay', 'Accept': 'application/json'})
+
+            games = await self._do_request(
+                "get",
+                f"{UBI_API_BASE}/v1/applications/global/webservices/ubisoftplus/vault/products?storefront=us",
+                add_to_headers={
+                    "Ubi-RequestedPlatformType": "uplay",
+                    "Accept": "application/json",
+                },
+            )
             return games or []
         except AuthenticationRequired:
             if self._auth_lost_callback:

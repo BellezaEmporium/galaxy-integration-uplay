@@ -1,11 +1,11 @@
 #use specific pip version for dependencies to work nicely
-pip==22.2.0
-pip-tools==6.14.0
+pip
+pip-tools
 
 requests
 
 #install requirements. 
-invoke==2.2.0
+invoke
 wheel
 
-galaxy.plugin.api==0.69
+galaxy.plugin.api==0.71

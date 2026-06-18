@@ -1,7 +1,6 @@
 import dateutil.parser
 import math
 import logging
-from typing import Tuple, Optional
 
 
 logger = logging.getLogger(__name__)
@@ -97,7 +96,7 @@ def _get_playtime_heuristics(time_stats):
     return time_sum
 
 
-def find_times(statscards: list, game_id: Optional[str] = None) -> Tuple[Optional[int], Optional[int]]:
+def find_times(statscards: list, game_id: str | None = None) -> tuple[int | None, int | None]:
     """
     result[0] - total_playtime in minutes
     result[1] - last_played as timestamp

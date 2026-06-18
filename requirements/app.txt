@@ -1,7 +1,7 @@
-galaxy.plugin.api==0.69
-aiohttp==3.8.6
-python-dateutil==2.9.0.post0
-requests==2.31.0
-psutil==7.0.0
-PyYAML==6.0.1
-file-read-backwards==3.2.0
+galaxy.plugin.api==0.71
+aiohttp
+python-dateutil
+requests
+psutil
+PyYAML
+file-read-backwards

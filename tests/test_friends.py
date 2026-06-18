@@ -1,4 +1,3 @@
-import asyncio
 import json
 import pytest
 from galaxy.api.types import FriendInfo
@@ -12,10 +11,10 @@ def result_friends():
     ]
 
 
-def test_friends(create_authenticated_plugin, result_friends):
-    loop = asyncio.get_event_loop()
-    pg = create_authenticated_plugin()
+@pytest.mark.asyncio
+async def test_friends(create_authenticated_plugin, result_friends):
+    pg = await create_authenticated_plugin()
 
-    result = loop.run_until_complete(pg.get_friends())
+    result = await pg.get_friends()
 
     assert result == result_friends

@@ -1,6 +1,6 @@
 from definitions import SYSTEM, System
 
-from consts import UBISOFT_REGISTRY_LAUNCHER, APPDATA_PATH
+from consts import UBISOFT_REGISTRY_LAUNCHER, APPDATA_PATH, UBISOFT_WOW6432_REGISTRY_LAUNCHER
 import os
 import logging as log
 
@@ -78,13 +78,22 @@ class LocalClient(object):
         return os.path.exists(self.ownership_path)
 
     def _find_windows_client(self):
+        # You may need to try WOW6432Node as well, as Ubisoft Connect is 32-bit.
         try:
             with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, UBISOFT_REGISTRY_LAUNCHER, 0,
                                 winreg.KEY_READ) as key:
                 directory, _ = winreg.QueryValueEx(key, "InstallDir")
                 return os.access(directory, os.F_OK), directory
         except OSError:
-            return False, ''
+            pass
+        try:
+            with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, UBISOFT_WOW6432_REGISTRY_LAUNCHER, 0,
+                                winreg.KEY_READ) as key:
+                directory, _ = winreg.QueryValueEx(key, "InstallDir")
+                return os.access(directory, os.F_OK), directory
+        except OSError:
+            pass
+        return False, ''
 
     def refresh(self):
         if SYSTEM == System.MACOS:
@@ -121,7 +130,7 @@ class LocalClient(object):
         else:
             if self._is_installed:
                 log.info('Local client uninstalled')
-                self._is_installed = False
+            self._is_installed = False
             self.configurations_path = None
             self.ownership_path = None
             self.settings_path = None
@@ -130,8 +139,9 @@ class LocalClient(object):
     def ownership_changed(self):
         path = self.ownership_path
         if path is None:
-            log.warning('Ownership file path is None, uplay client might not be installed')
             self.refresh()
+            if self._is_installed and self.user_id is not None:
+                log.warning('Ownership file path is None, uplay client might not be installed')
             return False
         try:
             stat = os.stat(path)

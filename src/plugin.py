@@ -8,14 +8,12 @@ import sys
 import webbrowser
 from yaml import scanner
 from urllib.parse import unquote
-from typing import Any, List, AsyncGenerator, Optional
-
 
 from galaxy.api.consts import Platform
 from galaxy.api.jsonrpc import ApplicationError
 from galaxy.api.errors import InvalidCredentials, AuthenticationRequired, AccessDenied, UnknownError, \
     UnknownBackendResponse
-from galaxy.api.plugin import Plugin, create_and_run_plugin
+from galaxy.api.plugin import Any, AsyncGenerator, Plugin, create_and_run_plugin
 from galaxy.api.types import Authentication, GameTime, NextStep, FriendInfo, GameLibrarySettings, \
     SubscriptionGame, Subscription, SubscriptionDiscovery
 
@@ -26,7 +24,7 @@ from local_game_status import ProcessWatcher, GameStatusNotifier
 from local_helper import get_local_game_path, get_size_at_path
 from definitions import GameStatus, UbisoftGame, GameType, System, SYSTEM
 from stats import find_times
-from consts import AUTH_JS, UBISOFT_APPID, UBISOFT_GENOMEID
+from consts import AUTH_JS, UBISOFT_LOGIN_APPID
 from games_collection import GamesCollection
 from version import __version__
 from steam import is_steam_installed
@@ -53,6 +51,14 @@ class UplayPlugin(Plugin):
 
     def auth_lost(self):
         self.lost_authentication()
+    
+    def _schedule_background_task(self, coro):
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            coro.close()
+            return None
+        return loop.create_task(coro)
 
     async def authenticate(self, stored_credentials=None):
         """Called when the plugin is started and needs to authenticate the user"""
@@ -61,7 +67,7 @@ class UplayPlugin(Plugin):
             "window_title": "Login | Ubisoft WebAuth",
             "window_width": 460,
             "window_height": 690,
-            "start_uri": f"https://connect.ubisoft.com/login?appId={UBISOFT_APPID}&genomeId={UBISOFT_GENOMEID}&lang=en-US&nextUrl=https:%2F%2Fconnect.ubisoft.com%2Fready",
+            "start_uri": f"https://connect.ubisoft.com/login?appId={UBISOFT_LOGIN_APPID}&lang=en-US&nextUrl=https:%2F%2Fconnect.ubisoft.com%2Fready",
             "end_uri_regex": r".*rememberMeTicket.*"
         }
         if not stored_credentials:
@@ -229,6 +235,8 @@ class UplayPlugin(Plugin):
         if self.local_client.configurations_accessible():
             try:
                 configuration_data = self.local_client.read_config()
+                if configuration_data is None:
+                    return
                 p = LocalParser()
                 games = []
                 for game in p.parse_games(configuration_data):
@@ -240,6 +248,8 @@ class UplayPlugin(Plugin):
     def _parse_local_game_ownership(self):
         if self.local_client.ownership_accessible():
             ownership_data = self.local_client.read_ownership()
+            if ownership_data is None:
+                return
             p = LocalParser()
             ownership_records = p.get_owned_local_games(ownership_data)
             log.info(f"Ownership Records {ownership_records}")
@@ -456,28 +466,33 @@ class UplayPlugin(Plugin):
     def refresh_game_statuses(self):
         if not self.local_client.was_user_logged_in:
             return
+
         statuses = self.game_status_notifier.statuses
         new_games = []
+
         for game in self.games_collection:
             try:
-                if statuses[game.install_id] == GameStatus.Installed and game.status in [GameStatus.NotInstalled,
-                                                                                         GameStatus.Unknown]:
+                if statuses[game.install_id] == GameStatus.Installed and game.status in [GameStatus.NotInstalled, GameStatus.Unknown]:
                     log.info(f"updating status for {game.name} to installed from not installed")
                     game.status = GameStatus.Installed
                     self.update_local_game_status(game.as_local_game())
+
                 elif statuses[game.install_id] == GameStatus.Installed and game.status == GameStatus.Running:
                     log.info(f"updating status for {game.name} to installed from running")
                     game.status = GameStatus.Installed
                     self.update_local_game_status(game.as_local_game())
-                    asyncio.create_task(self.prevent_uplay_from_showing())
+                    self._schedule_background_task(self.prevent_uplay_from_showing())
+
                 elif statuses[game.install_id] == GameStatus.Running and game.status != GameStatus.Running:
                     log.info(f"updating status for {game.name} to running")
                     game.status = GameStatus.Running
                     self.update_local_game_status(game.as_local_game())
+
                 elif statuses[game.install_id] in [GameStatus.NotInstalled, GameStatus.Unknown] and game.status not in [GameStatus.NotInstalled, GameStatus.Unknown]:
                     log.info(f"updating status for {game.name} to not installed")
                     game.status = GameStatus.NotInstalled
                     self.update_local_game_status(game.as_local_game())
+
             except KeyError:
                 continue
 
@@ -486,7 +501,7 @@ class UplayPlugin(Plugin):
                 new_games.append(game)
 
         if new_games:
-            asyncio.create_task(self._add_new_games(new_games))
+            self._schedule_background_task(self._add_new_games(new_games))
 
     async def get_friends(self):
         friends = await self.client.get_friends()
@@ -495,23 +510,23 @@ class UplayPlugin(Plugin):
             for friend in friends["friends"]
         ]
 
-    async def get_subscriptions(self) -> List[Subscription]:
+    async def get_subscriptions(self) -> list[Subscription]:
         sub_status = await self.client.get_subscription()
         sub_status = True if sub_status else False
         return [Subscription(subscription_name="Ubisoft+", end_time=None, owned=sub_status,
                              subscription_discovery=SubscriptionDiscovery.AUTOMATIC)]
 
-    async def prepare_subscription_games_context(self, subscription_names: List[str]) -> Any:
+    async def prepare_subscription_games_context(self, subscription_names: list[str]) -> Any:
         data = await self.client.get_subscription_games()
         if data:
             return [SubscriptionGame(game_title=(g.get('name') or 'Unknown'), game_id=str(g.get('ubisoftConnectGameId') or g.get('uplayGameId'))) for g in data if (g.get('ubisoftConnectGameId') or g.get('uplayGameId'))]
         return None
 
-    async def get_subscription_games(self, subscription_name: str, context: Any) -> AsyncGenerator[List[SubscriptionGame], None]:
+    async def get_subscription_games(self, subscription_name: str, context: Any) -> AsyncGenerator[list[SubscriptionGame], None]:
         yield context
 
     if SYSTEM == System.WINDOWS:
-        async def prepare_local_size_context(self, game_ids: List[str]) -> Any:
+        async def prepare_local_size_context(self, game_ids: list[str]) -> Any:
             local_paths = dict()
             for game in self.games_collection:
                 for requested_id in game_ids:
@@ -519,7 +534,7 @@ class UplayPlugin(Plugin):
                         local_paths[requested_id] = get_local_game_path(game.special_registry_path, game.launch_id)
             return local_paths
 
-        async def get_local_size(self, game_id: str, context: Any) -> Optional[int]:
+        async def get_local_size(self, game_id: str, context: Any) -> int | None:
             if game_id in context:
                 return await get_size_at_path(context[game_id])
 
@@ -568,6 +583,8 @@ class UplayPlugin(Plugin):
             if self.local_client.settings_accessible():
                 library_context = {}
                 settings_data = self.local_client.read_settings()
+                if settings_data is None:
+                    return None
                 parser = LocalParser()
                 favorite_games, hidden_games = parser.get_game_tags(settings_data)
                 for game_id in game_ids:
@@ -597,21 +614,29 @@ class UplayPlugin(Plugin):
         self.tick_count = 0
 
     def tick(self):
-        loop = asyncio.get_event_loop()
-        if SYSTEM == System.WINDOWS:
-            self.tick_count += 1
-            if self.tick_count % 1 == 0:
-                self.refresh_game_statuses()
-            if self.tick_count % 5 == 0:
-                if self.local_client.launcher_log_path is None:
-                    self.game_status_notifier.launcher_log_path = None
-            if self.tick_count % 9 == 0:
-                self._update_local_games_status()
-                if self.local_client.ownership_changed():
-                    if not self.updating_games:
-                        log.info('Ownership file has been changed or created. Reparsing.')
-                        loop.run_in_executor(None, self._update_games)
-        return
+        if SYSTEM != System.WINDOWS:
+            return
+
+        self.tick_count += 1
+
+        if self.tick_count % 1 == 0:
+            self.refresh_game_statuses()
+
+        if self.tick_count % 5 == 0:
+            if self.local_client.launcher_log_path is None:
+                self.game_status_notifier.launcher_log_path = None
+
+        if self.tick_count % 9 == 0:
+            self._update_local_games_status()
+
+        if self.local_client.ownership_changed() and not self.updating_games:
+            log.info("Ownership file has been changed or created. Reparsing.")
+            try:
+                loop = asyncio.get_running_loop()
+            except RuntimeError:
+                self._update_games()
+            else:
+                loop.run_in_executor(None, self._update_games)
 
     async def shutdown(self):
         log.info("Plugin shutdown.")

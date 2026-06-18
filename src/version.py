@@ -1,6 +1,11 @@
-__version__ = '0.55.7'
+__version__ = '0.60.0'
 
 __changelog__ = {
+    "0.60.0": """
+        - full support of galaxy 2.1 (using galaxy.plugin.api v71)
+        - bumped python version to 3.13
+        - clean codebase, removed unused code, refactored some parts
+    """,
     "0.55.7": """
         - change folder to be parsed (more up-to-date) & fixed configuration parsing [DeDovla]
         - change process hook names & websites to cater to new Ubisoft Connect structure [DeDovla]

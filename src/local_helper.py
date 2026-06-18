@@ -40,6 +40,19 @@ def _return_local_game_path(launch_id):
             except OSError:
                 return ""  # end of iteration
     except WindowsError:
+        pass  # Try WOW6432Node
+    
+    # Fallback to WOW6432Node for 32-bit registry
+    wow_installs_path = installs_path.replace('HKEY_LOCAL_MACHINE\\SOFTWARE', 'HKEY_LOCAL_MACHINE\\SOFTWARE\\WOW6432Node\\')
+    try:
+        with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, wow_installs_path):
+            try:
+                with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, wow_installs_path + f'\\{launch_id}') as lkey:
+                    game_path, _ = winreg.QueryValueEx(lkey, 'InstallDir')
+                    return os.path.normcase(os.path.normpath(game_path))
+            except OSError:
+                return ""
+    except WindowsError:
         return ""  # Game not installed / during installation
 
 
