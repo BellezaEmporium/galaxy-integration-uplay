@@ -1,5 +1,5 @@
 __version__ = '0.60.0'
-
+__branch__ = "galaxy-2.1"
 __changelog__ = {
     "0.60.0": """
         - full support of galaxy 2.1 (using galaxy.plugin.api v71)
