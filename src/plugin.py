@@ -24,7 +24,7 @@ from local_game_status import ProcessWatcher, GameStatusNotifier
 from local_helper import get_local_game_path, get_size_at_path
 from definitions import GameStatus, UbisoftGame, GameType, System, SYSTEM
 from stats import find_times
-from consts import AUTH_JS, UBISOFT_LOGIN_APPID
+from consts import AUTH_JS, OVERLAY_LOGIN_URL
 from games_collection import GamesCollection
 from version import __version__
 from steam import is_steam_installed
@@ -65,10 +65,10 @@ class UplayPlugin(Plugin):
 
         params = {
             "window_title": "Login | Ubisoft WebAuth",
-            "window_width": 460,
+            "window_width": 600,
             "window_height": 690,
-            "start_uri": f"https://connect.ubisoft.com/login?appId={UBISOFT_LOGIN_APPID}&lang=en-US&nextUrl=https:%2F%2Fwww.ubisoft.com%2Fen-US%2Faccount/login-success",
-            "end_uri_regex": r".*rememberMeTicket.*"
+            "start_uri": OVERLAY_LOGIN_URL,
+            "end_uri_regex": r"https://galaxy\.auth\.local/ubisoft.*"
         }
         if not stored_credentials:
             return NextStep("web_session", params, js=AUTH_JS)
@@ -89,15 +89,25 @@ class UplayPlugin(Plugin):
             return NextStep("web_session", params, js=AUTH_JS)
 
     async def pass_login_credentials(self, step, credentials, cookies):
-        """Called just after CEF authentication (called as NextStep by authenticate)"""
-        url = credentials["end_uri"][len("https://connect.ubisoft.com/logged-in.html"):]
-        storage_jsons = json.loads("[" + unquote(url) + "]")
-        user_data = await self.client.authorise_with_local_storage(storage_jsons)
-        self.local_client.initialize(user_data['userId'])
+        end_uri = credentials["end_uri"]
+        raw = end_uri.split("#", 1)[1] if "#" in end_uri else ""
+        if not raw:
+            raise InvalidCredentials()
+        session_data = json.loads(unquote(raw))
+        user_data = {
+            "ticket":           session_data["ticket"],
+            "sessionId":        session_data["sessionId"],
+            "userId":           session_data["userId"],
+            "username":         session_data.get("nameOnPlatform", ""),
+            "rememberMeTicket": session_data.get("rememberMeTicket"),
+        }
+        await self.client.restore_credentials(user_data, refresh_remember_me=False)
+        await self.client.post_sessions()
+        self.client._plugin.store_credentials(self.client.get_credentials())
+        self.local_client.initialize(user_data["userId"])
         self.client.set_auth_lost_callback(self.auth_lost)
-        auth = Authentication(user_data.get('userId') or '', user_data.get('username') or '')
         self._last_successful_auth = time.time()
-        return auth
+        return Authentication(user_data["userId"], user_data["username"])
 
     async def get_owned_games(self):
         if not self.client.is_authenticated():

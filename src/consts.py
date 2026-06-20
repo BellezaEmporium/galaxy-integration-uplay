@@ -28,48 +28,88 @@ CHROME_USERAGENT = "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHT
 def regex_pattern(regex: str) -> str:
     return ".*" + re.escape(regex) + ".*"
 
+OVERLAY_SPACE_ID = "0a706b37-4b88-4437-b8f4-4ed2458c9518" # from webpage
+OVERLAY_APP_ID   = "20adeb9c-6dad-404e-af1e-b12b4594e86e" # from webpage
 
-AUTH_JS = { regex_pattern(r"www.ubisoft.com/en-us/account/login-success"): [
-            r'''
-            window.location.replace("https://connect.ubisoft.com/logged-in.html"); 
-            '''
-        ],
-            regex_pattern(r"connect.ubisoft.com/logged-in.html"): [
-            r'''
-            window.location.replace(localStorage.getItem("PRODloginData") +","+ localStorage.getItem("PRODrememberMe") +"," + localStorage.getItem("PRODlastProfile"));
-            '''
-        ],
-            # Very specific, as email = email 2FA.
-            regex_pattern(r"connect.ubisoft.com/two-fa-email"): [
-            r'''
-                // Auto-check remember device checkbox
-                let rdCheckbox = document.getElementById("rdCheckbox");
-                if (rdCheckbox) {
-                    rdCheckbox.checked = true;
+OVERLAY_LOGIN_URL = (
+    f"https://connect.cdn.ubisoft.com/overlay/default/"
+    f"?env=prod&isStandalone=true&platform=pc&deviceType=desktop"
+    f"&locale=en-US&spaceId={OVERLAY_SPACE_ID}&applicationId={OVERLAY_APP_ID}"
+    f"&country=US&region=WW&ownershipGroup=empty"
+)
+
+
+AUTH_JS = {
+    regex_pattern(r"connect.cdn.ubisoft.com/overlay"): [
+        r'''
+        (function() {
+            var _capturedSession = null;
+
+            function tryRedirect(data) {
+                if (data && data.ticket && !data.twoFactorAuthenticationTicket) {
+                    _capturedSession = data;
                 }
-                
-                // Set device name to "GOG Galaxy"
-                let deviceNameField = document.querySelector("input[id='DeviceName']");
-                if (deviceNameField) {
-                    deviceNameField.value = "GOG Galaxy";
+            }
+
+            function doRedirect() {
+                if (_capturedSession) {
+                    var payload = encodeURIComponent(JSON.stringify(_capturedSession));
+                    window.location.replace("https://galaxy.auth.local/ubisoft#" + payload);
                 }
-            '''
-        ],
-            # Very specific, as ga = Google Authenticator. Same points, different page.
-            regex_pattern(r"connect.ubisoft.com/two-fa-ga"): [
-            r'''
-                // Auto-check remember device checkbox
-                let rdCheckbox = document.getElementById("rdCheckbox");
-                if (rdCheckbox) {
-                    rdCheckbox.checked = true;
-                }
-                
-                // Set device name to "GOG Galaxy"
-                let deviceNameField = document.querySelector("input[id='DeviceName']");
-                if (deviceNameField) {
-                    deviceNameField.value = "GOG Galaxy";
-                }
-            '''
-        ]
+            }
+
+            var _open = XMLHttpRequest.prototype.open;
+            var _send = XMLHttpRequest.prototype.send;
+
+            XMLHttpRequest.prototype.open = function(method, url) {
+                this._xurl = url; this._xmethod = method;
+                return _open.apply(this, arguments);
+            };
+
+            XMLHttpRequest.prototype.send = function(body) {
+                var xhr = this;
+                var orig = xhr.onreadystatechange;
+                xhr.onreadystatechange = function() {
+                    if (xhr.readyState === 4 && xhr.status === 200 && xhr._xurl) {
+                        if (xhr._xurl.indexOf("/v3/profiles/sessions") !== -1
+                                && xhr._xmethod && xhr._xmethod.toUpperCase() === "POST") {
+                            try { tryRedirect(JSON.parse(xhr.responseText)); } catch(e) {}
+                        }
+                        if (xhr._xurl.indexOf("/v4/spaces/global/ubiconnect/configcache/api/postauth") !== -1) {
+                            doRedirect();
+                        }
+                    }
+                    if (orig) orig.apply(this, arguments);
+                };
+                return _send.apply(this, arguments);
+            };
+
+            var _fetch = window.fetch;
+            window.fetch = function(input, init) {
+                var url = (typeof input === "string") ? input : (input && input.url) || "";
+                var method = (init && init.method) ? init.method.toUpperCase() : "GET";
+                return _fetch.apply(this, arguments).then(function(response) {
+                    if (response.ok) {
+                        if (url.indexOf("/v3/profiles/sessions") !== -1 && method === "POST") {
+                            response.clone().json().then(tryRedirect).catch(function(){});
+                        }
+                        if (url.indexOf("/v4/spaces/global/ubiconnect/configcache/api/postauth") !== -1) {
+                            doRedirect();
+                        }
+                    }
+                    return response;
+                });
+            };
+        })();
+        '''
+    ],
+    # 2FA - email
+    regex_pattern(r"connect\.ubisoft\.com/two-fa-email"): [
+        r'''
+        let rdCheckbox = document.getElementById("rdCheckbox");
+        if (rdCheckbox) { rdCheckbox.checked = true; }
+        let deviceNameField = document.querySelector("input[name='deviceName']");
+        if (deviceNameField) { deviceNameField.value = "GOG Galaxy"; }
+        '''
+    ],
 }
-
