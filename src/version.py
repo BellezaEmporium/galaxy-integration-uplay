@@ -1,6 +1,12 @@
-__version__ = '0.60.0'
+__version__ = '0.61.0'
 __branch__ = "galaxy-2.1"
 __changelog__ = {
+    "0.61.0": """
+        - fixed authentification flow due to Ubisoft removing the "ready" and "change_domain" endpoints
+        - fixed a bug in which the entitlements would show the whole catalogue instead of the owned games
+        - fixed a potential bug in which the games originating from the configuration would be deduped with the entitlements
+        - fixed a potential bug that would occasionally drop owned games due to their configuration size not meeting expectations
+    """,
     "0.60.0": """
         - full support of galaxy 2.1 (using galaxy.plugin.api v71)
         - bumped python version to 3.13

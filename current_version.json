@@ -1,12 +1,12 @@
 {
-    "tag_name": "v0.60.0",
+    "tag_name": "v0.61.0",
     "assets": [
         {
-            "browser_download_url": "https://github.com/BellezaEmporium/galaxy-integration-uplay/releases/download/v0.60.0/windows.zip",
+            "browser_download_url": "https://github.com/BellezaEmporium/galaxy-integration-uplay/releases/download/v0.61.0/windows.zip",
             "name": "windows.zip"
         },
         {
-            "browser_download_url": "https://github.com/BellezaEmporium/galaxy-integration-uplay/releases/download/v0.60.0/macos.zip",
+            "browser_download_url": "https://github.com/BellezaEmporium/galaxy-integration-uplay/releases/download/v0.61.0/macos.zip",
             "name": "macos.zip"
         }
     ]
