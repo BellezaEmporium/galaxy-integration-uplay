@@ -9,6 +9,7 @@ from steam import get_steam_game_status
 from consts import UBISOFT_CONFIGURATIONS_BLACKLISTED_NAMES
 from definitions import UbisoftGame, GameType, GameStatus
 
+_MIN_YAML_SIZE = 64
 
 class LocalParser:
     def __init__(self) -> None:
@@ -155,7 +156,7 @@ class LocalParser:
 
                     launch_id = install_id if launch_id == 0 or launch_id == install_id else launch_id
 
-                    if object_size > 500:
+                    if object_size > _MIN_YAML_SIZE:
                         records[install_id] = {
                             "size": object_size,
                             "offset": global_offset + header_size,

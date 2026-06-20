@@ -29,12 +29,12 @@ def regex_pattern(regex: str) -> str:
     return ".*" + re.escape(regex) + ".*"
 
 
-AUTH_JS = { regex_pattern(r"connect.ubisoft.com/ready"): [
+AUTH_JS = { regex_pattern(r"www.ubisoft.com/en-us/account/login-success"): [
             r'''
-            window.location.replace("https://connect.ubisoft.com/change_domain/"); 
+            window.location.replace("https://connect.ubisoft.com/logged-in.html"); 
             '''
         ],
-            regex_pattern(r"connect.ubisoft.com/change_domain"): [
+            regex_pattern(r"connect.ubisoft.com/logged-in.html"): [
             r'''
             window.location.replace(localStorage.getItem("PRODloginData") +","+ localStorage.getItem("PRODrememberMe") +"," + localStorage.getItem("PRODlastProfile"));
             '''

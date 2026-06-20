@@ -67,7 +67,7 @@ class UplayPlugin(Plugin):
             "window_title": "Login | Ubisoft WebAuth",
             "window_width": 460,
             "window_height": 690,
-            "start_uri": f"https://connect.ubisoft.com/login?appId={UBISOFT_LOGIN_APPID}&lang=en-US&nextUrl=https:%2F%2Fconnect.ubisoft.com%2Fready",
+            "start_uri": f"https://connect.ubisoft.com/login?appId={UBISOFT_LOGIN_APPID}&lang=en-US&nextUrl=https:%2F%2Fwww.ubisoft.com%2Fen-US%2Faccount/login-success",
             "end_uri_regex": r".*rememberMeTicket.*"
         }
         if not stored_credentials:
@@ -90,7 +90,7 @@ class UplayPlugin(Plugin):
 
     async def pass_login_credentials(self, step, credentials, cookies):
         """Called just after CEF authentication (called as NextStep by authenticate)"""
-        url = credentials["end_uri"][len("https://connect.ubisoft.com/change_domain/"):]
+        url = credentials["end_uri"][len("https://connect.ubisoft.com/logged-in.html"):]
         storage_jsons = json.loads("[" + unquote(url) + "]")
         user_data = await self.client.authorise_with_local_storage(storage_jsons)
         self.local_client.initialize(user_data['userId'])
@@ -163,8 +163,12 @@ class UplayPlugin(Plugin):
                 games = []
                 for game in entitlements_data:
                     try:
-                        if game.get('accessLevel') == 'owned' and game.get('type') == 'game' and game.get("availability") != 'expired':
-                            games.append(game)
+                        availability = game.get("availability", "")
+                        if availability == "expired":
+                            continue
+                        if not game.get("spaceId"):
+                            continue
+                        games.append(game)
                     except Exception as e:
                         log.warning(f"Error processing entitlement: {e}")
                         continue
