@@ -2,8 +2,7 @@ import os
 import sys
 import json
 import tempfile
-from shutil import rmtree, which
-from distutils.dir_util import copy_tree
+from shutil import rmtree, which, copytree
 
 from invoke.tasks import task
 from galaxy.tools import zip_folder_to_file
@@ -56,7 +55,7 @@ def build(c, output='output', ziparchive=None):
     os.unlink(tmp.name)
 
     print('--> Copying source files')
-    copy_tree("src", output)
+    copytree("src", output, dirs_exist_ok=True)
 
     if ziparchive is not None:
         print('--> Compressing to {}'.format(ziparchive))

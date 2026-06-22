@@ -2,7 +2,7 @@
     "name": "Ubisoft Connect",
     "platform": "uplay",
     "guid": "afb5a69c-b2ee-4d58-b916-f4cd75d4999a",
-    "version": "0.55.7",
+    "version": "0.55.8",
     "description": "Ubisoft Connect plugin for GOG Galaxy 2.0",
     "author": "Friends of Galaxy, BellezaEmporium, DeDovla",
     "email": "lanesh4d0w@gmail.com",

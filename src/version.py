@@ -1,6 +1,10 @@
-__version__ = '0.55.7'
+__version__ = '0.55.8'
 
 __changelog__ = {
+    "0.55.8": """
+        - updated the authentification flow to properly log in & refresh tokens
+        - fixed a bug in which the entitlements were not being properly fetched for some users
+    """,
     "0.55.7": """
         - change folder to be parsed (more up-to-date) & fixed configuration parsing [DeDovla]
         - change process hook names & websites to cater to new Ubisoft Connect structure [DeDovla]
