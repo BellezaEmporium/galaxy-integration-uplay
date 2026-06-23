@@ -26,7 +26,7 @@ from local_game_status import ProcessWatcher, GameStatusNotifier
 from local_helper import get_local_game_path, get_size_at_path
 from definitions import GameStatus, UbisoftGame, GameType, System, SYSTEM
 from stats import find_times
-from consts import AUTH_JS, UBISOFT_APPID, UBISOFT_GENOMEID
+from consts import AUTH_JS, OVERLAY_LOGIN_URL, UBISOFT_APPID, UBISOFT_GENOMEID
 from games_collection import GamesCollection
 from version import __version__
 from steam import is_steam_installed
@@ -61,8 +61,8 @@ class UplayPlugin(Plugin):
             "window_title": "Login | Ubisoft WebAuth",
             "window_width": 460,
             "window_height": 690,
-            "start_uri": f"https://connect.ubisoft.com/login?appId={UBISOFT_APPID}&genomeId={UBISOFT_GENOMEID}&lang=en-US&nextUrl=https:%2F%2Fconnect.ubisoft.com%2Fready",
-            "end_uri_regex": r".*rememberMeTicket.*"
+            "start_uri": OVERLAY_LOGIN_URL,
+            "end_uri_regex": r"https://galaxy\.auth\.local/ubisoft.*"
         }
         if not stored_credentials:
             return NextStep("web_session", params, js=AUTH_JS)
@@ -72,7 +72,7 @@ class UplayPlugin(Plugin):
             raise InvalidCredentials()
         except Exception:
             return NextStep("web_session", params, js=AUTH_JS)
-        
+
         if not isinstance(user_data, AuthenticationRequired):
             self.local_client.initialize(user_data['userId'])
             self.client.set_auth_lost_callback(self.auth_lost)
@@ -83,28 +83,40 @@ class UplayPlugin(Plugin):
             return NextStep("web_session", params, js=AUTH_JS)
 
     async def pass_login_credentials(self, step, credentials, cookies):
-        """Called just after CEF authentication (called as NextStep by authenticate)"""
-        url = credentials["end_uri"][len("https://connect.ubisoft.com/change_domain/"):]
-        storage_jsons = json.loads("[" + unquote(url) + "]")
-        user_data = await self.client.authorise_with_local_storage(storage_jsons)
-        self.local_client.initialize(user_data['userId'])
+        end_uri = credentials["end_uri"]
+        raw = end_uri.split("#", 1)[1] if "#" in end_uri else ""
+        if not raw:
+            raise InvalidCredentials()
+        session_data = json.loads(unquote(raw))
+        user_data = {
+            "ticket":           session_data["ticket"],
+            "sessionId":        session_data["sessionId"],
+            "userId":           session_data["userId"],
+            "username":         session_data.get("nameOnPlatform", ""),
+            "rememberMeTicket": session_data.get("rememberMeTicket"),
+        }
+        await self.client.restore_credentials(user_data, refresh_remember_me=False)
+        await self.client.post_sessions()
+        self.client._plugin.store_credentials(self.client.get_credentials())
+        self.local_client.initialize(user_data["userId"])
         self.client.set_auth_lost_callback(self.auth_lost)
-        auth = Authentication(user_data.get('userId') or '', user_data.get('username') or '')
         self._last_successful_auth = time.time()
-        return auth
+        return Authentication(user_data["userId"], user_data["username"])
 
     async def get_owned_games(self):
         if not self.client.is_authenticated():
             raise AuthenticationRequired()
 
-        if SYSTEM == System.WINDOWS:
-            self._parse_local_games()
-            self._parse_local_game_ownership()
-
         try:
             await self._parse_ubiplus_games()
         except Exception as e:
             log.exception(f"Parsing ubiplus games failed: {repr(e)}")
+
+        if SYSTEM == System.WINDOWS and self.local_client.is_installed:
+            self._parse_local_games()
+            self._parse_local_game_ownership()
+
+        self._reconcile_ownership()
 
         try:
             await self._parse_subscription_games()
@@ -119,13 +131,17 @@ class UplayPlugin(Plugin):
         return [game.as_galaxy_game() for game in self.games_collection
                 if game.owned]
 
+    def _reconcile_ownership(self):
+        for game in self.games_collection:
+            if game.owned is None:
+                game.owned = False
+
     async def _parse_subscription_games(self):
         """Parse Ubisoft+ subscription games list (vault)"""
         try:
             games_data = await self.client.get_subscription_games()
             if not games_data:
                 return
-            # games_data is a list of product dicts
             parsed = []
             for prod in games_data:
                 try:
@@ -145,8 +161,7 @@ class UplayPlugin(Plugin):
             log.debug(f"Subscription games parsing failed: {repr(e)}")
 
     async def _parse_ubiplus_games(self):
-        """Parse owned games list from backend"""
-        BATCH_SIZE = 50  # Ubisoft can only return 50 results per request. Do not overload.
+        BATCH_SIZE = 50
 
         if not self.parsing_ubiplus_games:
             try:
@@ -157,44 +172,72 @@ class UplayPlugin(Plugin):
                 games = []
                 for game in entitlements_data:
                     try:
-                        if game.get('accessLevel') == 'owned' and game.get('type') == 'game' and game.get("availability") != 'expired':
+                        if (game.get('accessLevel') == 'owned'
+                                and game.get('type') == 'game'
+                                and game.get('availability') != 'expired'):
                             games.append(game)
                     except Exception as e:
                         log.warning(f"Error processing entitlement: {e}")
                         continue
+
                 log.debug(f"Filtered {len(games)} owned games from {len(entitlements_data)} total entitlements")
-                
+
                 ubiplus_games = []
                 batched_games = [games[i:i + BATCH_SIZE] for i in range(0, len(games), BATCH_SIZE)]
                 log.debug(f"Processing {len(batched_games)} batches of up to {BATCH_SIZE} games each")
-                
+
                 for batch_index, game_batch in enumerate(batched_games):
                     try:
                         space_ids = [game['spaceId'] for game in game_batch if game.get('spaceId')]
                         if not space_ids:
                             log.debug(f"Batch {batch_index + 1}: No valid spaceIds, skipping")
                             continue
-                            
+
                         log.debug(f"Batch {batch_index + 1}/{len(batched_games)}: Requesting {len(space_ids)} games")
                         game_request = await self.client.get_applications(space_ids)
                         game_data = game_request.get('games', [])
                         log.debug(f"Batch {batch_index + 1}: Received {len(game_data)} games from API")
-                        
+
                         for game in game_data:
                             try:
                                 platforms = game.get('platforms', [])
-                                pc_platform_exists = any(
-                                    platform.get('type') == "PC" 
-                                    for platform in platforms 
+                                launch_id = ''
+                                install_id = ''
+
+                                for platform in platforms:
+                                    if not isinstance(platform, dict):
+                                        continue
+                                    if platform.get('type') == 'PC':
+                                        raw_id = (
+                                            platform.get('externalGameId')
+                                            or platform.get('platformGameId')
+                                            or platform.get('uplayGameId')
+                                            or platform.get('gameId')
+                                        )
+                                        if raw_id:
+                                            launch_id = str(raw_id)
+                                            install_id = launch_id
+                                        break
+
+                                pc_platform_exists = bool(launch_id) or any(
+                                    platform.get('type') == 'PC'
+                                    for platform in platforms
                                     if isinstance(platform, dict)
                                 )
+
                                 if pc_platform_exists:
                                     ubiplus_games.append(UbisoftGame(
                                         space_id=game.get('spaceId', ''),
-                                        launch_id='', install_id='', third_party_id='',
-                                        name=game.get('name', 'Unknown'), path='', type=GameType.New,
-                                        special_registry_path='', exe='',
-                                        status=GameStatus.Unknown, owned=True
+                                        launch_id=launch_id,
+                                        install_id=install_id,
+                                        third_party_id='',
+                                        name=game.get('name', 'Unknown'),
+                                        path='',
+                                        type=GameType.New,
+                                        special_registry_path='',
+                                        exe='',
+                                        status=GameStatus.Unknown,
+                                        owned=True
                                     ))
                             except Exception as e:
                                 log.warning(f"Error processing game data: {e}")
@@ -204,9 +247,10 @@ class UplayPlugin(Plugin):
                     except Exception as e:
                         log.warning(f"Batch {batch_index + 1}: Error - {repr(e)}")
                         continue
-                
+
                 log.info(f"Parsed {len(ubiplus_games)} PC games from Ubisoft entitlements")
                 self.games_collection.extend(ubiplus_games)
+
             except (KeyError, TypeError) as e:
                 log.error(f"Unknown response from Ubisoft while trying to parse games {repr(e)}")
                 raise UnknownBackendResponse()
@@ -222,10 +266,6 @@ class UplayPlugin(Plugin):
                 await asyncio.sleep(0.2)
 
     def _parse_local_games(self):
-        """Parsing local files should lead to every game having a launch id.
-        A game in the games_collection which doesn't have a launch id probably
-        means that a game was added through the get_entitlements request but its space id
-        was not present in configuration file and we couldn't find a matching launch id for it."""
         if self.local_client.configurations_accessible():
             try:
                 configuration_data = self.local_client.read_config()
@@ -417,7 +457,6 @@ class UplayPlugin(Plugin):
                     log.warning("Game already installed, launching")
                     return await self.launch_game(game_id)
 
-            # if launch_id is not known, try to launch local client instead
             self.open_uplay_client()
             log.info(
                 f"Did not found game with game_id: {game_id}, proper launch_id and NotInstalled status, launching client.")
@@ -530,7 +569,6 @@ class UplayPlugin(Plugin):
                 return
             url = "start uplay://"
             subprocess.Popen(url, shell=True)
-            # Uplay tries to get focus a couple of times when being launched
             end_time = time.time() + 15
             while time.time() <= end_time:
                 await self.prevent_uplay_from_showing(kill_attempt=False)
@@ -583,17 +621,14 @@ class UplayPlugin(Plugin):
         async def get_game_library_settings(self, game_id, context):
             log.debug(f"Context {context}")
             if not context:
-                # Unable to retrieve context
                 return GameLibrarySettings(game_id, None, None)
             game_library_settings = context.get(game_id)
             if game_library_settings is None:
-                # Able to retrieve context but game is not in its values -> It doesnt have any tags or hidden status set
                 return GameLibrarySettings(game_id, [], False)
             return GameLibrarySettings(game_id, ['favorite'] if game_library_settings['favorite'] else [],
                                        game_library_settings['hidden'])
 
     def reset_tick_count(self):
-        # Resetting tick count ensures that certain operations performed on tick will be made with a known delay.
         self.tick_count = 0
 
     def tick(self):

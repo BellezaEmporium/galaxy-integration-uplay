@@ -139,7 +139,7 @@ class LocalParser(object):
 
                     launch_id = install_id if launch_id == 0 or launch_id == install_id else launch_id
 
-                    if object_size > 500:
+                    if object_size > 64:
                         records[install_id] = {'size': object_size, 'offset': global_offset + header_size, 'install_id': install_id, 'launch_id': launch_id}
                     global_offset_tmp = global_offset
                     global_offset += object_size + header_size

@@ -10,8 +10,8 @@ blob_storage
 plugin-uplay.spec
 
 # development stuff
-venv
-.venv
+venv*
+.venv*
 .DS_Store
 .vscode
 .idea
